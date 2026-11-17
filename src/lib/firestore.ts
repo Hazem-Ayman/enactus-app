@@ -12,7 +12,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Member, PointEvent, Committee, Feedback } from '@/types';
+import { Member, PointEvent, Committee, Feedback, SessionFeedback } from '@/types';
 
 // Check if Firebase is properly configured
 export const isFirebaseConfigured = () => {
@@ -145,5 +145,45 @@ export async function getAllFeedbackForAdmin(): Promise<Feedback[]> {
 export async function flagFeedback(feedbackId: string, flagged: boolean = true): Promise<void> {
   const ref = doc(db, 'feedback', feedbackId);
   await updateDoc(ref, { flagged });
+}
+
+// --- Session & Coordinator Evaluation API ---
+
+export async function submitSessionFeedback(data: {
+  memberId?: string;
+  memberName?: string;
+  isAnonymous: boolean;
+  sessionRating: number;
+  coordinatorRating: number;
+  keyTakeaway: string;
+  improvementWish: string;
+}): Promise<void> {
+  // 1. Save Session Evaluation
+  await addDoc(collection(db, 'session_feedback'), {
+    memberId: data.isAnonymous ? null : data.memberId,
+    memberName: data.isAnonymous ? 'Anonymous Member' : data.memberName,
+    isAnonymous: data.isAnonymous,
+    sessionRating: data.sessionRating,
+    coordinatorRating: data.coordinatorRating,
+    keyTakeaway: data.keyTakeaway.trim(),
+    improvementWish: data.improvementWish.trim(),
+    createdAt: Date.now(),
+  });
+
+  // 2. Award participation points if not anonymous
+  if (!data.isAnonymous && data.memberId && data.memberName) {
+    await addPointEvent(
+      data.memberId,
+      data.memberName,
+      5,
+      'Submitted Session & Coordinator Evaluation'
+    );
+  }
+}
+
+export async function getAllSessionFeedback(): Promise<SessionFeedback[]> {
+  const q = query(collection(db, 'session_feedback'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SessionFeedback));
 }
 

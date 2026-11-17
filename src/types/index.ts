@@ -32,3 +32,15 @@ export interface Feedback {
   flagged?: boolean;
   createdAt: number;
 }
+
+export interface SessionFeedback {
+  id: string;
+  memberId?: string;
+  memberName?: string; // Optional if anonymous
+  isAnonymous: boolean;
+  sessionRating: number; // 1 to 5 stars
+  coordinatorRating: number; // 1 to 5 stars
+  keyTakeaway: string; // What was most helpful
+  improvementWish: string; // What could be improved for next session
+  createdAt: number;
+}

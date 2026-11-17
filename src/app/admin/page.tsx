@@ -6,9 +6,10 @@ import {
   getAllMembers, 
   addPointEvent, 
   createMember,
-  getAllFeedbackForAdmin 
+  getAllFeedbackForAdmin,
+  getAllSessionFeedback 
 } from '@/lib/firestore';
-import { Member, Committee, Feedback } from '@/types';
+import { Member, Committee, Feedback, SessionFeedback } from '@/types';
 import Avatar from '@/components/Avatar';
 import confetti from 'canvas-confetti';
 import { 
@@ -38,6 +39,8 @@ export default function AdminPage() {
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
+  const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
+  const [feedbackSubTab, setFeedbackSubTab] = useState<'peer' | 'session'>('peer');
   const [loading, setLoading] = useState(false);
 
   // Manual Points Form State
@@ -94,6 +97,8 @@ export default function AdminPage() {
       setMembers(data);
       const fb = await getAllFeedbackForAdmin();
       setFeedbackList(fb);
+      const sfb = await getAllSessionFeedback();
+      setSessionFeedbackList(sfb);
     } catch (err) {
       console.error(err);
     } finally {
@@ -578,7 +583,7 @@ export default function AdminPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-white flex items-center gap-1.5">
               <MessageSquareHeart className="w-4 h-4 text-amber-400" />
-              <span>All Peer Feedback ({feedbackList.length})</span>
+              <span>Feedback Moderation</span>
             </h2>
             <button
               onClick={loadMembers}
@@ -588,40 +593,110 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {feedbackList.length === 0 ? (
-            <div className="text-center py-10 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
-              No feedback submitted yet.
-            </div>
-          ) : (
-            feedbackList.map((item) => (
-              <div
-                key={item.id}
-                className={`p-3 rounded-2xl border space-y-2 ${
-                  item.flagged
-                    ? 'bg-rose-500/10 border-rose-500/50'
-                    : 'bg-slate-800/60 border-slate-700/80'
-                }`}
-              >
-                <div className="flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-amber-400">{item.fromMemberName}</span>
-                    <span className="text-slate-400"> → </span>
-                    <span className="font-bold text-white">{item.toMemberName}</span>
-                  </div>
-                  {item.flagged && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                      <Flag className="w-3 h-3" /> Flagged
-                    </span>
-                  )}
-                </div>
+          {/* Sub tabs: Peer vs Session Feedback */}
+          <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl text-xs font-semibold">
+            <button
+              onClick={() => setFeedbackSubTab('peer')}
+              className={`py-1.5 rounded-lg transition-all ${
+                feedbackSubTab === 'peer'
+                  ? 'bg-amber-400 text-slate-950 font-bold'
+                  : 'text-slate-400'
+              }`}
+            >
+              Peer Critique ({feedbackList.length})
+            </button>
+            <button
+              onClick={() => setFeedbackSubTab('session')}
+              className={`py-1.5 rounded-lg transition-all ${
+                feedbackSubTab === 'session'
+                  ? 'bg-amber-400 text-slate-950 font-bold'
+                  : 'text-slate-400'
+              }`}
+            >
+              Session & Coordinator ({sessionFeedbackList.length})
+            </button>
+          </div>
 
-                <div className="text-[11px] space-y-1 text-slate-300">
-                  <p><strong className="text-amber-400">⭐ Star 1:</strong> {item.star1}</p>
-                  <p><strong className="text-amber-400">⭐ Star 2:</strong> {item.star2}</p>
-                  <p><strong className="text-sky-400">✨ Wish:</strong> {item.wish}</p>
+          {/* Peer Feedback List */}
+          {feedbackSubTab === 'peer' && (
+            <div className="space-y-2">
+              {feedbackList.length === 0 ? (
+                <div className="text-center py-8 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
+                  No peer feedback submitted yet.
                 </div>
-              </div>
-            ))
+              ) : (
+                feedbackList.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`p-3 rounded-2xl border space-y-2 ${
+                      item.flagged
+                        ? 'bg-rose-500/10 border-rose-500/50'
+                        : 'bg-slate-800/60 border-slate-700/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-bold text-amber-400">{item.fromMemberName}</span>
+                        <span className="text-slate-400"> → </span>
+                        <span className="font-bold text-white">{item.toMemberName}</span>
+                      </div>
+                      {item.flagged && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                          <Flag className="w-3 h-3" /> Flagged
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-[11px] space-y-1 text-slate-300">
+                      <p><strong className="text-amber-400">⭐ Star 1:</strong> {item.star1}</p>
+                      <p><strong className="text-amber-400">⭐ Star 2:</strong> {item.star2}</p>
+                      <p><strong className="text-sky-400">✨ Wish:</strong> {item.wish}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Session & Coordinator Feedback List */}
+          {feedbackSubTab === 'session' && (
+            <div className="space-y-2">
+              {sessionFeedbackList.length === 0 ? (
+                <div className="text-center py-8 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
+                  No session evaluations submitted yet.
+                </div>
+              ) : (
+                sessionFeedbackList.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-2"
+                  >
+                    <div className="flex items-center justify-between text-xs border-b border-slate-700/50 pb-1.5">
+                      <span className="font-bold text-white">
+                        {item.isAnonymous ? '🕵️ Anonymous' : item.memberName}
+                      </span>
+                      <div className="flex gap-2 text-[10px]">
+                        <span className="text-amber-400 font-bold">
+                          Session: {item.sessionRating}★
+                        </span>
+                        <span className="text-yellow-400 font-bold">
+                          Lead: {item.coordinatorRating}★
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] space-y-1 text-slate-300">
+                      <p>
+                        <strong className="text-emerald-400">Liked most:</strong> {item.keyTakeaway}
+                      </p>
+                      <p>
+                        <strong className="text-sky-400">Suggestion / Wish:</strong> {item.improvementWish}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           )}
         </div>
       )}
