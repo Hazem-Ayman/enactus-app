@@ -118,16 +118,21 @@ export default function LeaderboardPage() {
 
                 {/* Member Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-xs text-white truncate">
-                      {member.name}
-                    </span>
-                    {isCurrent && (
-                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-400 text-slate-950 rounded-full flex-shrink-0">
-                        YOU
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-xs text-white truncate">
+                        {member.name}
                       </span>
-                    )}
-                  </div>
+                      {member.titleBadge && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full flex-shrink-0">
+                          🎖️ {member.titleBadge}
+                        </span>
+                      )}
+                      {isCurrent && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-bold bg-yellow-400 text-slate-950 rounded-full flex-shrink-0">
+                          YOU
+                        </span>
+                      )}
+                    </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-[10px] text-yellow-400 font-mono font-medium">
                       {member.id}

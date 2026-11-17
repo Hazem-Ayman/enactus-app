@@ -439,6 +439,11 @@ export default function HomePage() {
                 <h1 className="text-lg font-bold text-white flex items-center gap-1.5">
                   {currentMember.name}
                 </h1>
+                {currentMember.titleBadge && (
+                  <span className="inline-block mt-0.5 px-2 py-0.5 text-[10px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full">
+                    🎖️ {currentMember.titleBadge}
+                  </span>
+                )}
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="font-mono text-[10px] bg-slate-900 px-2 py-0.5 rounded-md border border-slate-700 text-yellow-400 font-bold">
                     ID: {currentMember.id}

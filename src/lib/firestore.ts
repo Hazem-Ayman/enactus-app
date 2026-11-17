@@ -56,9 +56,36 @@ export async function createMember(data: {
   return { id: shortId, ...memberData };
 }
 
+// --- Member Management & Admin Controls ---
+
 export async function updateMemberAvatar(memberId: string, avatar: AvatarConfig): Promise<void> {
   const memberRef = doc(db, 'members', memberId);
   await updateDoc(memberRef, { avatar });
+}
+
+export async function updateMemberProfile(
+  memberId: string, 
+  data: { name: string; email: string; titleBadge?: string }
+): Promise<void> {
+  const memberRef = doc(db, 'members', memberId);
+  await updateDoc(memberRef, {
+    name: data.name.trim(),
+    email: data.email.trim().toLowerCase(),
+    titleBadge: data.titleBadge || '',
+  });
+}
+
+export async function deleteMember(memberId: string): Promise<void> {
+  const memberRef = doc(db, 'members', memberId);
+  const { deleteDoc } = await import('firebase/firestore');
+  await deleteDoc(memberRef);
+}
+
+export async function awardTitleBadge(memberId: string, titleBadge: string): Promise<void> {
+  const memberRef = doc(db, 'members', memberId);
+  await updateDoc(memberRef, {
+    titleBadge: titleBadge.trim(),
+  });
 }
 
 export async function findMemberByEmailAndId(

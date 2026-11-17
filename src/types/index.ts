@@ -17,6 +17,7 @@ export interface Member {
   streak: number; // consecutive attended sessions
   totalPoints: number;
   role?: 'member' | 'admin';
+  titleBadge?: string; // e.g. "Most Improved", "Stage Presence", "Breakthrough Storyteller"
   createdAt: number;
 }
 

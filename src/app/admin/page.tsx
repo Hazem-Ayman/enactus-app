@@ -14,7 +14,10 @@ import {
   saveSessionGroups,
   getGuidelinesContent,
   updateGuidelinesContent,
-  deleteGuidelinesContent 
+  deleteGuidelinesContent,
+  updateMemberProfile,
+  deleteMember,
+  awardTitleBadge 
 } from '@/lib/firestore';
 import { Member, Committee, Feedback, SessionFeedback, Session } from '@/types';
 import BotAvatar from '@/components/BotAvatar';
@@ -38,7 +41,11 @@ import {
   CheckCircle2,
   BookOpen,
   Save,
-  Trash2
+  Trash2,
+  Edit2,
+  FileSpreadsheet,
+  Medal,
+  Download
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -46,14 +53,21 @@ export default function AdminPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // Active Tab: 'points' | 'picker' | 'feedback' | 'sessions'
-  const [activeTab, setActiveTab] = useState<'points' | 'picker' | 'feedback' | 'sessions'>('points');
+  // Active Tab: 'points' | 'picker' | 'feedback' | 'sessions' | 'guidelines' | 'members'
+  const [activeTab, setActiveTab] = useState<'points' | 'picker' | 'feedback' | 'sessions' | 'guidelines' | 'members'>('points');
 
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
   const [feedbackSubTab, setFeedbackSubTab] = useState<'peer' | 'session'>('peer');
+
+  // Member Management & Titles State
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [memberActionMsg, setMemberActionMsg] = useState('');
   
   // Priority 4: Editable Guidelines & Saved Groups State
   const [guidelinesText, setGuidelinesText] = useState('');
@@ -139,7 +153,73 @@ export default function AdminPage() {
     }
   };
 
-  // Save guidelines to Firestore
+  // Handle Edit Member Profile & Title Badge
+  const handleOpenEdit = (m: Member) => {
+    setEditingMember(m);
+    setEditName(m.name);
+    setEditEmail(m.email);
+    setEditTitle(m.titleBadge || '');
+  };
+
+  const handleSaveMemberEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+    try {
+      await updateMemberProfile(editingMember.id, {
+        name: editName,
+        email: editEmail,
+        titleBadge: editTitle,
+      });
+      setMemberActionMsg(`Updated ${editName}'s profile successfully!`);
+      setEditingMember(null);
+      await loadMembers();
+      setTimeout(() => setMemberActionMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error updating member: ' + err.message);
+    }
+  };
+
+  // Handle Delete Member
+  const handleDeleteMember = async (m: Member) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to permanently delete member ${m.name} (${m.id})? This cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteMember(m.id);
+      setMemberActionMsg(`Deleted member ${m.name}.`);
+      await loadMembers();
+      setTimeout(() => setMemberActionMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error deleting member: ' + err.message);
+    }
+  };
+
+  // CSV Export
+  const handleExportCSV = () => {
+    const exportable = members.filter((m) => m.id !== 'ENC-2302');
+    const headers = ['Member ID', 'Full Name', 'Email', 'Total Points', 'Streak Sessions', 'Special Title', 'Joined Date'];
+    
+    const rows = exportable.map((m) => [
+      `"${m.id}"`,
+      `"${m.name.replace(/"/g, '""')}"`,
+      `"${m.email.replace(/"/g, '""')}"`,
+      m.totalPoints || 0,
+      m.streak || 0,
+      `"${(m.titleBadge || '').replace(/"/g, '""')}"`,
+      `"${new Date(m.createdAt).toLocaleDateString()}"`,
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `enactus_presentations_members_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   const handleSaveGuidelines = async (e: React.FormEvent) => {
     e.preventDefault();
     setGuidelinesSaving(true);
@@ -404,7 +484,7 @@ export default function AdminPage() {
       </div>
 
       {/* Admin Nav Tabs */}
-      <div className="grid grid-cols-5 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+      <div className="grid grid-cols-6 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => setActiveTab('points')}
           className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
@@ -426,6 +506,17 @@ export default function AdminPage() {
         >
           <CalendarCheck className="w-3.5 h-3.5" />
           <span className="truncate">Sessions</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('members')}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            activeTab === 'members'
+              ? 'bg-yellow-400 text-slate-950 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span className="truncate">Members</span>
         </button>
         <button
           onClick={() => setActiveTab('picker')}
@@ -1003,6 +1094,164 @@ export default function AdminPage() {
           )}
         </div>
       )}
+      {/* --- TAB 6: MEMBERS DIRECTORY & MANAGEMENT (Priority 2 & 3) --- */}
+      {activeTab === 'members' && (
+        <div className="space-y-4">
+          {/* Header with CSV Export */}
+          <div className="flex items-center justify-between bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/80">
+            <div>
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Users className="w-4 h-4 text-yellow-400" />
+                <span>Presentations Members ({members.filter((m) => m.id !== 'ENC-2302').length})</span>
+              </h3>
+              <p className="text-[10px] text-slate-400">Edit profiles, grant awards & export data</p>
+            </div>
+
+            <button
+              onClick={handleExportCSV}
+              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export CSV</span>
+            </button>
+          </div>
+
+          {memberActionMsg && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-xl flex items-center gap-1.5 font-medium">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              <span>{memberActionMsg}</span>
+            </div>
+          )}
+
+          {/* Edit Member Modal */}
+          {editingMember && (
+            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <form
+                onSubmit={handleSaveMemberEdit}
+                className="max-w-sm w-full bg-slate-900 border border-slate-700 rounded-3xl p-5 space-y-3.5 shadow-2xl"
+              >
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h3 className="font-bold text-xs text-white flex items-center gap-1.5">
+                    <Edit2 className="w-3.5 h-3.5 text-yellow-400" />
+                    <span>Edit Member ({editingMember.id})</span>
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditingMember(null)}
+                    className="text-slate-400 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-300">Full Name</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-300">Email Address</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-amber-400 flex items-center gap-1">
+                    <Medal className="w-3.5 h-3.5" />
+                    <span>Special Title / Prestige Badge</span>
+                  </label>
+                  <select
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
+                  >
+                    <option value="">-- No Badge Assigned --</option>
+                    <option value="Most Improved Speaker">Most Improved Speaker</option>
+                    <option value="Best Stage Presence">Best Stage Presence</option>
+                    <option value="Most Consistent">Most Consistent</option>
+                    <option value="Breakthrough Storyteller">Breakthrough Storyteller</option>
+                    <option value="Audience Magnet">Audience Magnet</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold rounded-xl text-xs transition-all"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingMember(null)}
+                    className="px-3 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Members List with Edit & Delete actions */}
+          <div className="space-y-2">
+            {members
+              .filter((m) => m.id !== 'ENC-2302')
+              .map((m) => (
+                <div
+                  key={m.id}
+                  className="p-3 bg-slate-800/60 border border-slate-700/80 rounded-2xl flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <BotAvatar config={m.avatar} size="sm" />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-xs text-white truncate">{m.name}</span>
+                        {m.titleBadge && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full">
+                            🎖️ {m.titleBadge}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono block truncate">
+                        {m.id} • {m.email}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => handleOpenEdit(m)}
+                      className="p-2 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-yellow-400 transition-colors"
+                      title="Edit Profile & Badge"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteMember(m)}
+                      className="p-2 rounded-xl bg-slate-700/60 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                      title="Delete Member"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* --- TAB 5: EDITABLE GUIDELINES (Priority 4) --- */}
       {(activeTab as any) === 'guidelines' && (
         <form onSubmit={handleSaveGuidelines} className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3">
