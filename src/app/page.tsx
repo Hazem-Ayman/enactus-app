@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { 
-  findMemberByEmailAndId, 
-  createMember, 
-  getMemberById, 
+import {
+  findMemberByEmailAndId,
+  createMember,
+  getMemberById,
   getAllMembers,
   updateMemberAvatar,
   getMemberPointHistory,
@@ -17,14 +17,14 @@ import { Member, AvatarConfig, PointEvent, SavedGroup } from '@/types';
 import BotAvatar from '@/components/BotAvatar';
 import AvatarCustomizer from '@/components/AvatarCustomizer';
 import confetti from 'canvas-confetti';
-import { 
-  Trophy, 
-  BookOpen, 
-  Award, 
-  Sparkles, 
-  ArrowRight, 
-  LogOut, 
-  UserPlus, 
+import {
+  Trophy,
+  BookOpen,
+  Award,
+  Sparkles,
+  ArrowRight,
+  LogOut,
+  UserPlus,
   LogIn,
   Star,
   Flame,
@@ -380,6 +380,12 @@ export default function HomePage() {
               <Users className="w-4 h-4 text-yellow-400" />
               <span>Registered Members ({allMembers.filter(m => m.id !== 'ENC-2302').length})</span>
             </h3>
+            <Link
+              href="/admin"
+              className="px-2.5 py-1 bg-yellow-400 text-slate-950 font-black rounded-lg text-xs hover:bg-yellow-300 transition-colors"
+            >
+              Open Members & CSV Tools →
+            </Link>
           </div>
 
           <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
@@ -471,7 +477,7 @@ export default function HomePage() {
 
           {/* Points & Rank Grid (Tap points to see History - Priority 4) */}
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700/50">
-            <div 
+            <div
               onClick={handleOpenPointHistory}
               className="bg-slate-900/60 p-3 rounded-2xl border border-slate-700/50 cursor-pointer hover:border-yellow-400/50 transition-colors group relative"
             >
@@ -635,9 +641,8 @@ export default function HomePage() {
                         </span>
                       </div>
                       <span
-                        className={`font-black text-sm ${
-                          event.amount >= 0 ? 'text-yellow-400' : 'text-rose-400'
-                        }`}
+                        className={`font-black text-sm ${event.amount >= 0 ? 'text-yellow-400' : 'text-rose-400'
+                          }`}
                       >
                         {event.amount >= 0 ? `+${event.amount}` : event.amount}
                       </span>
@@ -703,11 +708,10 @@ export default function HomePage() {
 
                 {buddyMsg && (
                   <div
-                    className={`p-2.5 rounded-xl text-xs flex items-center gap-1.5 ${
-                      buddyMsg.error
-                        ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
-                        : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
-                    }`}
+                    className={`p-2.5 rounded-xl text-xs flex items-center gap-1.5 ${buddyMsg.error
+                      ? 'bg-rose-500/10 border border-rose-500/30 text-rose-400'
+                      : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                      }`}
                   >
                     {buddyMsg.error ? (
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -776,21 +780,19 @@ export default function HomePage() {
       <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => { setAuthMode('signup'); setErrorMsg(''); }}
-          className={`py-2 rounded-lg transition-all ${
-            authMode === 'signup'
-              ? 'bg-yellow-400 text-slate-950 shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
+          className={`py-2 rounded-lg transition-all ${authMode === 'signup'
+            ? 'bg-yellow-400 text-slate-950 shadow-sm'
+            : 'text-slate-400 hover:text-white'
+            }`}
         >
           New Member (Sign Up)
         </button>
         <button
           onClick={() => { setAuthMode('login'); setErrorMsg(''); }}
-          className={`py-2 rounded-lg transition-all ${
-            authMode === 'login'
-              ? 'bg-yellow-400 text-slate-950 shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
+          className={`py-2 rounded-lg transition-all ${authMode === 'login'
+            ? 'bg-yellow-400 text-slate-950 shadow-sm'
+            : 'text-slate-400 hover:text-white'
+            }`}
         >
           Sign In (Email + ID)
         </button>
@@ -907,8 +909,8 @@ export default function HomePage() {
               {submitting
                 ? 'Authenticating...'
                 : loginId.trim().toUpperCase() === 'ENC-2302'
-                ? 'Sign In as Coordinator'
-                : 'Sign In with Email & ID'}
+                  ? 'Sign In as Coordinator'
+                  : 'Sign In with Email & ID'}
             </span>
           </button>
         </form>
