@@ -170,13 +170,13 @@ export async function submitSessionFeedback(data: {
     createdAt: Date.now(),
   });
 
-  // 2. Award participation points if not anonymous
-  if (!data.isAnonymous && data.memberId && data.memberName) {
+  // 2. Award +5 points in both cases (whether anonymous or with name)
+  if (data.memberId) {
     await addPointEvent(
       data.memberId,
-      data.memberName,
+      data.memberName || 'Member',
       5,
-      'Submitted Session & Coordinator Evaluation'
+      'Submitted Session & Coordinator Feedback'
     );
   }
 }

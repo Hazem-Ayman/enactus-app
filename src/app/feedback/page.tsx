@@ -168,9 +168,7 @@ export default function FeedbackPage() {
       });
 
       setSuccessMsg(
-        isAnonymous
-          ? 'Thank you! Your anonymous feedback has been recorded safely.'
-          : 'Thank you! Your feedback has been submitted, and +5 points were added to your profile! ⭐'
+        'Thank you! Your feedback has been submitted, and +5 bonus points were added to your profile! ⭐'
       );
       setKeyTakeaway('');
       setImprovementWish('');
@@ -448,7 +446,9 @@ export default function FeedbackPage() {
               <div>
                 <span className="text-xs font-semibold text-white block">Submit Anonymously</span>
                 <span className="text-[10px] text-slate-400">
-                  {isAnonymous ? 'Your identity is hidden' : 'Coordinator will see your name (+5 pts)'}
+                  {isAnonymous
+                    ? 'Your name is completely hidden from the coordinator'
+                    : 'Coordinator will see who sent this'}
                 </span>
               </div>
             </div>
@@ -472,11 +472,7 @@ export default function FeedbackPage() {
           >
             <Send className="w-4 h-4" />
             <span>
-              {submitting
-                ? 'Submitting...'
-                : isAnonymous
-                ? 'Send Anonymous Feedback'
-                : 'Send Feedback (+5 pts)'}
+              {submitting ? 'Submitting...' : 'Send Feedback (+5 pts)'}
             </span>
           </button>
         </form>
