@@ -10,6 +10,7 @@ export interface AvatarConfig {
 
 export interface Member {
   id: string; // Auto-generated short unique ID (e.g. EN-8492) or ENC-2302
+  docId?: string; // Firestore document ID
   name: string;
   email: string;
   committee: Committee;

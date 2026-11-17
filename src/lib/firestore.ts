@@ -74,9 +74,33 @@ export async function updateMemberProfile(
   });
 }
 
-export async function deleteMember(memberId: string): Promise<void> {
-  const memberRef = doc(db, 'members', memberId);
-  await deleteDoc(memberRef);
+export async function deleteMember(memberId: string, docId?: string): Promise<void> {
+  // 1. Delete by docId if known
+  if (docId) {
+    try {
+      await deleteDoc(doc(db, 'members', docId));
+    } catch (e) {
+      console.warn('Error deleting by docId:', e);
+    }
+  }
+
+  // 2. Delete by memberId directly
+  try {
+    await deleteDoc(doc(db, 'members', memberId));
+  } catch (e) {
+    console.warn('Error deleting by memberId:', e);
+  }
+
+  // 3. Delete any document that holds this ID inside its data
+  try {
+    const q = query(collection(db, 'members'), where('id', '==', memberId));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      await deleteDoc(d.ref);
+    }
+  } catch (e) {
+    console.warn('Error cleaning up query matches:', e);
+  }
 }
 
 // --- Live Broadcast of Random Picker to All Members ---
@@ -95,6 +119,33 @@ export function subscribeToLivePicker(callback: (data: { isSpinning: boolean; se
   return onSnapshot(docRef, (snap) => {
     if (snap.exists()) {
       callback(snap.data() as any);
+    } else {
+      callback(null);
+    }
+  });
+}
+
+// --- Live Broadcast of Shuffled Groups to All Members ---
+
+export interface LiveGroupsState {
+  isShuffling: boolean;
+  groups: {
+    teamNumber: number;
+    members: { id: string; name: string }[];
+  }[];
+  timestamp: number;
+}
+
+export async function broadcastGroupsState(data: LiveGroupsState): Promise<void> {
+  const docRef = doc(db, 'settings', 'live_groups');
+  await setDoc(docRef, data);
+}
+
+export function subscribeToLiveGroups(callback: (data: LiveGroupsState | null) => void) {
+  const docRef = doc(db, 'settings', 'live_groups');
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.data() as LiveGroupsState);
     } else {
       callback(null);
     }
@@ -199,7 +250,14 @@ export async function findMemberByEmailAndId(
 export async function getAllMembers(): Promise<Member[]> {
   const q = query(collection(db, 'members'), orderBy('totalPoints', 'desc'));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
+  return snapshot.docs.map((docSnap) => {
+    const data = docSnap.data();
+    return {
+      ...data,
+      docId: docSnap.id,
+      id: data.id || docSnap.id,
+    } as Member;
+  });
 }
 
 export async function getMemberById(id: string): Promise<Member | null> {

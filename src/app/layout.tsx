@@ -4,6 +4,7 @@ import './globals.css';
 import BottomNav from '@/components/BottomNav';
 import InstallPrompt from '@/components/InstallPrompt';
 import LivePickerPopup from '@/components/LivePickerPopup';
+import LiveGroupsPopup from '@/components/LiveGroupsPopup';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -34,6 +35,7 @@ export default function RootLayout({
           <main className="flex-1 w-full px-4 py-6">
             <InstallPrompt />
             <LivePickerPopup />
+            <LiveGroupsPopup />
             {children}
           </main>
           <BottomNav />

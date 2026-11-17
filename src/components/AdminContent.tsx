@@ -14,6 +14,7 @@ import {
   updateMemberProfile,
   deleteMember,
   broadcastPickerState,
+  broadcastGroupsState,
   getSectionToggles,
   updateSectionToggles,
   SectionToggles
@@ -69,12 +70,14 @@ export default function AdminContent() {
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [attendanceSuccess, setAttendanceSuccess] = useState('');
 
-  // Member Edit State
+  // Member Edit & Delete State
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [memberActionMsg, setMemberActionMsg] = useState('');
+  const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Picker State
   const [presentMemberIds, setPresentMemberIds] = useState<Set<string>>(new Set());
@@ -166,37 +169,66 @@ export default function AdminContent() {
     }
   };
 
-  // Delete Member (Fixed direct Firestore delete)
-  const handleDeleteMember = async (m: Member) => {
-    const confirmDelete = window.confirm(
-      `Permanently delete member "${m.name}" (${m.id})?`
-    );
-    if (!confirmDelete) return;
+  // Delete Member Confirmation Flow
+  const handleDeleteMember = (m: Member) => {
+    setMemberToDelete(m);
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!memberToDelete) return;
+    setDeleteLoading(true);
     try {
-      await deleteMember(m.id);
-      setMemberActionMsg(`Deleted member ${m.name}.`);
-      setMembers((prev) => prev.filter((item) => item.id !== m.id));
+      await deleteMember(memberToDelete.id, (memberToDelete as any).docId);
+      setMembers((prev) =>
+        prev.filter(
+          (item) =>
+            item.id !== memberToDelete.id &&
+            (item as any).docId !== (memberToDelete as any).docId
+        )
+      );
+      setMemberActionMsg(`Deleted member ${memberToDelete.name}.`);
+      setMemberToDelete(null);
       setTimeout(() => setMemberActionMsg(''), 4000);
     } catch (err: any) {
       alert('Error deleting member: ' + err.message);
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
-  // Add Points
+  // Add Points (Independent Search / Direct Selection)
   const handleAddPoints = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedMemberId || pointsAmount === '' || !pointsReason.trim()) return;
+
+    // Find target member either from selectedMemberId or from pointsSearch string
+    let targetMember = members.find((m) => m.id === selectedMemberId);
+    if (!targetMember && pointsSearch.trim()) {
+      const q = pointsSearch.trim().toLowerCase();
+      targetMember = members.find(
+        (m) =>
+          m.id !== 'ENC-2302' &&
+          (m.name.toLowerCase() === q ||
+           m.id.toLowerCase() === q ||
+           m.name.toLowerCase().includes(q))
+      );
+    }
+
+    if (!targetMember) {
+      alert('Please search or select a member first!');
+      return;
+    }
+
+    if (pointsAmount === '' || !pointsReason.trim()) {
+      alert('Please enter both point amount and a reason.');
+      return;
+    }
 
     setPointsSubmitting(true);
     setPointsSuccessMsg('');
 
     try {
-      const targetMember = members.find((m) => m.id === selectedMemberId);
-      if (!targetMember) throw new Error('Member not found');
-
       await addPointEvent(
-        selectedMemberId,
+        targetMember.id,
         targetMember.name,
         Number(pointsAmount),
         pointsReason
@@ -205,6 +237,8 @@ export default function AdminContent() {
       setPointsSuccessMsg(`Awarded ${pointsAmount} pts to ${targetMember.name}!`);
       setPointsAmount('');
       setPointsReason('');
+      setSelectedMemberId('');
+      setPointsSearch('');
       await loadData();
       setTimeout(() => setPointsSuccessMsg(''), 4000);
     } catch (err: any) {
@@ -323,18 +357,43 @@ export default function AdminContent() {
     }, 120);
   };
 
-  const handleGenerateGroups = () => {
+  const handleGenerateGroups = async () => {
     if (presentMembersList.length < 2) {
       alert('Need at least 2 present members to form groups!');
       return;
     }
+
+    // 1. Live broadcast to all screens: Shuffling animation
+    await broadcastGroupsState({
+      isShuffling: true,
+      groups: [],
+      timestamp: Date.now(),
+    });
+
     const shuffled = [...presentMembersList].sort(() => Math.random() - 0.5);
     const groups: Member[][] = [];
     for (let i = 0; i < shuffled.length; i += groupSize) {
       groups.push(shuffled.slice(i, i + groupSize));
     }
     setGeneratedGroups(groups);
-    confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+
+    const payload = groups.map((group, idx) => ({
+      teamNumber: idx + 1,
+      members: group.map((m) => ({ id: m.id, name: m.name })),
+    }));
+
+    // 2. Broadcast final teams after 1.2s delay for suspense
+    setTimeout(async () => {
+      await broadcastGroupsState({
+        isShuffling: false,
+        groups: payload,
+        timestamp: Date.now(),
+      });
+      await saveSessionGroups("Today's Session Teams", payload);
+      setGroupsSavedMsg('Teams broadcasted live to all member devices & saved!');
+      confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
+      setTimeout(() => setGroupsSavedMsg(''), 5000);
+    }, 1200);
   };
 
   const handleSaveSessionGroups = async () => {
@@ -344,8 +403,14 @@ export default function AdminContent() {
         teamNumber: idx + 1,
         members: group.map((m) => ({ id: m.id, name: m.name })),
       }));
+      await broadcastGroupsState({
+        isShuffling: false,
+        groups: payload,
+        timestamp: Date.now(),
+      });
       await saveSessionGroups("Today's Session Teams", payload);
-      setGroupsSavedMsg('Groups saved! Members can now see their team on Home.');
+      setGroupsSavedMsg('Teams re-broadcasted live to all member screens!');
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
       setTimeout(() => setGroupsSavedMsg(''), 4000);
     } catch (err: any) {
       alert('Error saving groups: ' + err.message);
@@ -403,6 +468,16 @@ export default function AdminContent() {
   const presentMembersList = members
     .filter((m) => m.id !== 'ENC-2302')
     .filter((m) => presentMemberIds.has(m.id));
+
+  const selectedMember = members.find((m) => m.id === selectedMemberId);
+
+  const filteredPointsMembers = members
+    .filter((m) => m.id !== 'ENC-2302')
+    .filter((m) => {
+      if (!pointsSearch.trim()) return true;
+      const q = pointsSearch.toLowerCase();
+      return m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
+    });
 
   return (
     <div className="space-y-4">
@@ -491,35 +566,83 @@ export default function AdminContent() {
           )}
 
           <form onSubmit={handleAddPoints} className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-xs text-slate-300 font-medium">Select Member</label>
-              <input
-                type="text"
-                placeholder="Filter member names or IDs..."
-                value={pointsSearch}
-                onChange={(e) => setPointsSearch(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white mb-2"
-              />
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-300 font-bold">Select Member</label>
+                {selectedMember && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMemberId('');
+                      setPointsSearch('');
+                    }}
+                    className="text-[10px] text-amber-400 hover:underline"
+                  >
+                    Clear selection
+                  </button>
+                )}
+              </div>
 
-              <select
-                value={selectedMemberId}
-                onChange={(e) => setSelectedMemberId(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                required
-              >
-                <option value="">-- Choose a member --</option>
-                {members
-                  .filter((m) => m.id !== 'ENC-2302')
-                  .filter((m) => 
-                    m.name.toLowerCase().includes(pointsSearch.toLowerCase()) ||
-                    m.id.toLowerCase().includes(pointsSearch.toLowerCase())
-                  )
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} [{m.id}] - {m.totalPoints || 0} pts (🔥 {m.streak || 0})
-                    </option>
-                  ))}
-              </select>
+              {selectedMember ? (
+                <div className="p-3 bg-yellow-400/10 border-2 border-yellow-400/80 rounded-2xl flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <BotAvatar config={selectedMember.avatar} size="sm" />
+                    <div className="min-w-0">
+                      <span className="font-bold text-xs text-white block truncate">{selectedMember.name}</span>
+                      <span className="text-[10px] text-yellow-300 font-mono">
+                        {selectedMember.id} • {selectedMember.totalPoints || 0} pts (🔥 {selectedMember.streak || 0})
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMemberId('');
+                      setPointsSearch('');
+                    }}
+                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-bold transition-all"
+                  >
+                    Change ✕
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <input
+                    type="text"
+                    placeholder="Search member name or ID (or tap below)..."
+                    value={pointsSearch}
+                    onChange={(e) => setPointsSearch(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                  />
+
+                  <div className="max-h-40 overflow-y-auto space-y-1 pr-1 bg-slate-900/60 p-2 rounded-xl border border-slate-800">
+                    {filteredPointsMembers.length === 0 ? (
+                      <p className="text-[11px] text-slate-400 text-center py-2">
+                        No members matching &quot;{pointsSearch}&quot;
+                      </p>
+                    ) : (
+                      filteredPointsMembers.map((m) => (
+                        <div
+                          key={m.id}
+                          onClick={() => {
+                            setSelectedMemberId(m.id);
+                            setPointsSearch('');
+                          }}
+                          className="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 hover:bg-yellow-400/15 hover:border-yellow-400/50 border border-transparent cursor-pointer transition-all"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <BotAvatar config={m.avatar} size="sm" />
+                            <span className="text-xs font-bold text-white truncate">{m.name}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
+                            {m.id} • {m.totalPoints || 0} pts
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -815,6 +938,42 @@ export default function AdminContent() {
             </div>
           )}
 
+          {/* Delete Member Confirmation Modal */}
+          {memberToDelete && (
+            <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="max-w-xs w-full bg-slate-900 border border-rose-500/50 rounded-3xl p-5 space-y-4 shadow-2xl text-center">
+                <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-bold text-sm text-white">Permanently Delete Member?</h3>
+                  <p className="text-xs text-slate-300">
+                    Are you sure you want to delete <strong className="text-white">{memberToDelete.name}</strong> ({memberToDelete.id})?
+                  </p>
+                  <p className="text-[10px] text-rose-400">This action cannot be undone.</p>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    disabled={deleteLoading}
+                    onClick={handleConfirmDelete}
+                    className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs transition-all shadow-md disabled:opacity-50 cursor-pointer"
+                  >
+                    {deleteLoading ? 'Deleting...' : 'Yes, Delete'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteLoading}
+                    onClick={() => setMemberToDelete(null)}
+                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Members List */}
           <div className="space-y-2">
             {members
@@ -883,10 +1042,10 @@ export default function AdminContent() {
             <button
               onClick={handleGenerateGroups}
               disabled={presentMembersList.length < 2}
-              className="p-3.5 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold rounded-2xl flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
+              className="p-3.5 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold rounded-2xl flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50 cursor-pointer"
             >
               <Users className="w-5 h-5" />
-              <span className="text-xs">Random Groups</span>
+              <span className="text-xs">Random Groups (Live Pop-up)</span>
             </button>
           </div>
 
