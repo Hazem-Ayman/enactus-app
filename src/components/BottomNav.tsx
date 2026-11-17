@@ -58,6 +58,7 @@ export default function BottomNav() {
         { name: 'Home', href: '/', icon: Home, visible: true },
         { name: 'Sessions', href: '/sessions', icon: CalendarCheck, visible: true },
         { name: 'Members', href: '/members', icon: Users, visible: true },
+        { name: 'Games', href: '/games', icon: Gamepad2, visible: toggles.gameCenterEnabled },
         { name: 'Feedback', href: '/feedback', icon: MessageSquareHeart, visible: toggles.feedbackEnabled },
         { name: 'Ranks', href: '/leaderboard', icon: Trophy, visible: true },
         { name: 'Guide', href: '/guidelines', icon: BookOpen, visible: true },
