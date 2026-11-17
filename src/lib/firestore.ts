@@ -8,6 +8,9 @@ import {
   where, 
   orderBy, 
   updateDoc, 
+  deleteDoc,
+  setDoc,
+  onSnapshot,
   increment, 
   serverTimestamp 
 } from 'firebase/firestore';
@@ -47,11 +50,7 @@ export async function createMember(data: {
 
   // Use the short ID as the Firestore document ID so it never changes
   const docRef = doc(db, 'members', shortId);
-  await updateDoc(docRef, memberData as any).catch(async () => {
-    // If not existing, set it
-    const { setDoc } = await import('firebase/firestore');
-    await setDoc(docRef, memberData);
-  });
+  await setDoc(docRef, memberData, { merge: true });
 
   return { id: shortId, ...memberData };
 }
@@ -77,8 +76,61 @@ export async function updateMemberProfile(
 
 export async function deleteMember(memberId: string): Promise<void> {
   const memberRef = doc(db, 'members', memberId);
-  const { deleteDoc } = await import('firebase/firestore');
   await deleteDoc(memberRef);
+}
+
+// --- Live Broadcast of Random Picker to All Members ---
+
+export async function broadcastPickerState(data: {
+  isSpinning: boolean;
+  selectedMember: Member | null;
+  timestamp: number;
+}): Promise<void> {
+  const docRef = doc(db, 'settings', 'live_picker');
+  await setDoc(docRef, data);
+}
+
+export function subscribeToLivePicker(callback: (data: { isSpinning: boolean; selectedMember: Member | null; timestamp: number } | null) => void) {
+  const docRef = doc(db, 'settings', 'live_picker');
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.data() as any);
+    } else {
+      callback(null);
+    }
+  });
+}
+
+// --- Feature Toggles (Disable/Enable Sections) ---
+
+export interface SectionToggles {
+  feedbackEnabled: boolean;
+  gameCenterEnabled: boolean;
+}
+
+export async function getSectionToggles(): Promise<SectionToggles> {
+  const docRef = doc(db, 'settings', 'toggles');
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) {
+    return { feedbackEnabled: true, gameCenterEnabled: false };
+  }
+  return snap.data() as SectionToggles;
+}
+
+export async function updateSectionToggles(toggles: Partial<SectionToggles>): Promise<void> {
+  const docRef = doc(db, 'settings', 'toggles');
+  await setDoc(docRef, toggles, { merge: true });
+}
+
+export function subscribeToSectionToggles(callback: (toggles: SectionToggles) => void) {
+  const docRef = doc(db, 'settings', 'toggles');
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.data() as SectionToggles);
+    } else {
+      callback({ feedbackEnabled: true, gameCenterEnabled: false });
+    }
+  });
 }
 
 export async function awardTitleBadge(memberId: string, titleBadge: string): Promise<void> {
@@ -127,7 +179,6 @@ export async function findMemberByEmailAndId(
       createdAt: Date.now(),
     };
 
-    const { setDoc } = await import('firebase/firestore');
     await setDoc(docRef, adminUser);
     return adminUser;
   }
@@ -278,7 +329,6 @@ export async function getMemberPointHistory(memberId: string): Promise<PointEven
 
 export async function saveSessionGroups(name: string, groups: { teamNumber: number; members: { id: string; name: string }[] }[]): Promise<void> {
   const docRef = doc(db, 'settings', 'latest_groups');
-  const { setDoc } = await import('firebase/firestore');
   await setDoc(docRef, {
     name,
     groups,
@@ -304,7 +354,6 @@ export async function getGuidelinesContent(): Promise<string | null> {
 
 export async function updateGuidelinesContent(content: string): Promise<void> {
   const docRef = doc(db, 'settings', 'guidelines');
-  const { setDoc } = await import('firebase/firestore');
   await setDoc(docRef, {
     content,
     updatedAt: Date.now(),
@@ -313,7 +362,6 @@ export async function updateGuidelinesContent(content: string): Promise<void> {
 
 export async function deleteGuidelinesContent(): Promise<void> {
   const docRef = doc(db, 'settings', 'guidelines');
-  const { deleteDoc } = await import('firebase/firestore');
   await deleteDoc(docRef);
 }
 
@@ -458,13 +506,11 @@ export async function flagFeedback(feedbackId: string, flagged: boolean = true):
 
 export async function deleteFeedbackItem(feedbackId: string): Promise<void> {
   const ref = doc(db, 'feedback', feedbackId);
-  const { deleteDoc } = await import('firebase/firestore');
   await deleteDoc(ref);
 }
 
 export async function deleteSessionFeedbackItem(feedbackId: string): Promise<void> {
   const ref = doc(db, 'session_feedback', feedbackId);
-  const { deleteDoc } = await import('firebase/firestore');
   await deleteDoc(ref);
 }
 

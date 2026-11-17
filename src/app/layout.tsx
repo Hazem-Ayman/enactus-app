@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import BottomNav from '@/components/BottomNav';
 import InstallPrompt from '@/components/InstallPrompt';
+import LivePickerPopup from '@/components/LivePickerPopup';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -32,6 +33,7 @@ export default function RootLayout({
         <div className="max-w-md mx-auto min-h-screen bg-slate-900 shadow-2xl relative flex flex-col pb-20 border-x border-slate-800/60">
           <main className="flex-1 w-full px-4 py-6">
             <InstallPrompt />
+            <LivePickerPopup />
             {children}
           </main>
           <BottomNav />

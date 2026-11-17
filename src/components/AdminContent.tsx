@@ -12,40 +12,47 @@ import {
   updateGuidelinesContent,
   deleteGuidelinesContent,
   updateMemberProfile,
-  deleteMember
+  deleteMember,
+  broadcastPickerState,
+  getSectionToggles,
+  updateSectionToggles,
+  SectionToggles
 } from '@/lib/firestore';
 import { Member, Session } from '@/types';
 import BotAvatar from '@/components/BotAvatar';
 import confetti from 'canvas-confetti';
 import { 
-  ShieldCheck, 
   PlusCircle, 
   Shuffle, 
   Users, 
   Sparkles, 
-  Search, 
   Award, 
   CheckSquare, 
   Square, 
   CalendarCheck, 
   Flame, 
-  CheckCircle2,
-  BookOpen,
-  Save,
-  Trash2,
-  Edit2,
-  Download
+  CheckCircle2, 
+  BookOpen, 
+  Save, 
+  Trash2, 
+  Edit2, 
+  Download,
+  ToggleLeft,
+  ToggleRight,
+  SlidersHorizontal,
+  Gamepad2,
+  MessageSquareHeart
 } from 'lucide-react';
 
 export default function AdminContent() {
-  // Active Tab: 'points' | 'sessions' | 'members' | 'picker' | 'guidelines'
-  const [activeTab, setActiveTab] = useState<'points' | 'sessions' | 'members' | 'picker' | 'guidelines'>('points');
+  // Tabs: 'points' | 'sessions' | 'members' | 'picker' | 'guidelines' | 'toggles'
+  const [activeTab, setActiveTab] = useState<'points' | 'sessions' | 'members' | 'picker' | 'guidelines' | 'toggles'>('points');
 
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Manual Points Form State
+  // Manual Points State
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [pointsAmount, setPointsAmount] = useState<number | ''>('');
   const [pointsReason, setPointsReason] = useState('');
@@ -53,7 +60,7 @@ export default function AdminContent() {
   const [pointsSuccessMsg, setPointsSuccessMsg] = useState('');
   const [pointsSearch, setPointsSearch] = useState('');
 
-  // Sessions & Attendance State
+  // Sessions State
   const [sessionsList, setSessionsList] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [newSessionTitle, setNewSessionTitle] = useState('');
@@ -62,7 +69,7 @@ export default function AdminContent() {
   const [attendanceSaving, setAttendanceSaving] = useState(false);
   const [attendanceSuccess, setAttendanceSuccess] = useState('');
 
-  // Member Management & Titles State
+  // Member Edit State
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
@@ -83,6 +90,13 @@ export default function AdminContent() {
   const [guidelinesSaving, setGuidelinesSaving] = useState(false);
   const [guidelinesMsg, setGuidelinesMsg] = useState('');
 
+  // Section Toggles State
+  const [toggles, setToggles] = useState<SectionToggles>({
+    feedbackEnabled: true,
+    gameCenterEnabled: true,
+  });
+  const [togglesMsg, setTogglesMsg] = useState('');
+
   useEffect(() => {
     loadData();
   }, []);
@@ -99,6 +113,8 @@ export default function AdminContent() {
       }
       const gGuide = await getGuidelinesContent();
       if (gGuide) setGuidelinesText(gGuide);
+      const t = await getSectionToggles();
+      setToggles(t);
     } catch (err) {
       console.error(err);
     } finally {
@@ -106,7 +122,68 @@ export default function AdminContent() {
     }
   };
 
-  // --- Handlers: Manual Points ---
+  // Toggle Section
+  const handleToggle = async (key: keyof SectionToggles) => {
+    const updated = { ...toggles, [key]: !toggles[key] };
+    setToggles(updated);
+    try {
+      await updateSectionToggles(updated);
+      setTogglesMsg('Navigation updated live for all members!');
+      setTimeout(() => setTogglesMsg(''), 3000);
+    } catch (err: any) {
+      alert('Error updating toggles: ' + err.message);
+    }
+  };
+
+  // Export CSV (Fixed with direct Blob download for mobile & desktop)
+  const handleExportCSV = () => {
+    try {
+      const exportable = members.filter((m) => m.id !== 'ENC-2302');
+      const headers = ['Member ID', 'Full Name', 'Email', 'Total Points', 'Streak Sessions', 'Special Title', 'Joined Date'];
+      
+      const rows = exportable.map((m) => [
+        `"${m.id}"`,
+        `"${(m.name || '').replace(/"/g, '""')}"`,
+        `"${(m.email || '').replace(/"/g, '""')}"`,
+        m.totalPoints || 0,
+        m.streak || 0,
+        `"${(m.titleBadge || '').replace(/"/g, '""')}"`,
+        `"${new Date(m.createdAt || Date.now()).toLocaleDateString()}"`,
+      ]);
+
+      const csvString = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\r\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `enactus_members_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert('Error exporting CSV: ' + err.message);
+    }
+  };
+
+  // Delete Member (Fixed direct Firestore delete)
+  const handleDeleteMember = async (m: Member) => {
+    const confirmDelete = window.confirm(
+      `Permanently delete member "${m.name}" (${m.id})?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await deleteMember(m.id);
+      setMemberActionMsg(`Deleted member ${m.name}.`);
+      setMembers((prev) => prev.filter((item) => item.id !== m.id));
+      setTimeout(() => setMemberActionMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error deleting member: ' + err.message);
+    }
+  };
+
+  // Add Points
   const handleAddPoints = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedMemberId || pointsAmount === '' || !pointsReason.trim()) return;
@@ -125,7 +202,7 @@ export default function AdminContent() {
         pointsReason
       );
 
-      setPointsSuccessMsg(`Successfully awarded ${pointsAmount} pts to ${targetMember.name}!`);
+      setPointsSuccessMsg(`Awarded ${pointsAmount} pts to ${targetMember.name}!`);
       setPointsAmount('');
       setPointsReason('');
       await loadData();
@@ -137,7 +214,7 @@ export default function AdminContent() {
     }
   };
 
-  // --- Handlers: Sessions & Attendance ---
+  // Create Session
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSessionTitle.trim() || !newSessionDate) return;
@@ -154,6 +231,7 @@ export default function AdminContent() {
     }
   };
 
+  // Save Attendance
   const handleSaveAttendance = async () => {
     if (!selectedSessionId) {
       alert('Please select or create a session first.');
@@ -181,14 +259,15 @@ export default function AdminContent() {
     }
   };
 
-  // --- Handlers: Member Management ---
+  // Open Member Edit Modal
   const handleOpenEdit = (m: Member) => {
     setEditingMember(m);
-    setEditName(m.name);
-    setEditEmail(m.email);
+    setEditName(m.name || '');
+    setEditEmail(m.email || '');
     setEditTitle(m.titleBadge || '');
   };
 
+  // Save Member Edit
   const handleSaveMemberEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMember) return;
@@ -198,7 +277,7 @@ export default function AdminContent() {
         email: editEmail,
         titleBadge: editTitle,
       });
-      setMemberActionMsg(`Updated ${editName}'s profile successfully!`);
+      setMemberActionMsg(`Updated ${editName}'s profile!`);
       setEditingMember(null);
       await loadData();
       setTimeout(() => setMemberActionMsg(''), 4000);
@@ -207,65 +286,8 @@ export default function AdminContent() {
     }
   };
 
-  const handleDeleteMember = async (m: Member) => {
-    const confirmDelete = window.confirm(
-      `Are you sure you want to permanently delete member ${m.name} (${m.id})? This cannot be undone.`
-    );
-    if (!confirmDelete) return;
-
-    try {
-      await deleteMember(m.id);
-      setMemberActionMsg(`Deleted member ${m.name}.`);
-      await loadData();
-      setTimeout(() => setMemberActionMsg(''), 4000);
-    } catch (err: any) {
-      alert('Error deleting member: ' + err.message);
-    }
-  };
-
-  const handleExportCSV = () => {
-    const exportable = members.filter((m) => m.id !== 'ENC-2302');
-    const headers = ['Member ID', 'Full Name', 'Email', 'Total Points', 'Streak Sessions', 'Special Title', 'Joined Date'];
-    
-    const rows = exportable.map((m) => [
-      `"${m.id}"`,
-      `"${m.name.replace(/"/g, '""')}"`,
-      `"${m.email.replace(/"/g, '""')}"`,
-      m.totalPoints || 0,
-      m.streak || 0,
-      `"${(m.titleBadge || '').replace(/"/g, '""')}"`,
-      `"${new Date(m.createdAt).toLocaleDateString()}"`,
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `enactus_presentations_members_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // --- Handlers: Picker & Groups ---
-  const toggleAttendance = (id: string) => {
-    setPresentMemberIds((prev) => {
-      const updated = new Set(prev);
-      if (updated.has(id)) updated.delete(id);
-      else updated.add(id);
-      return updated;
-    });
-  };
-
-  const filteredPickerMembers = members
-    .filter((m) => m.id !== 'ENC-2302')
-    .filter((m) => m.name.toLowerCase().includes(pickerSearch.toLowerCase()));
-
-  const presentMembersList = members
-    .filter((m) => m.id !== 'ENC-2302')
-    .filter((m) => presentMemberIds.has(m.id));
-
-  const handleRandomPick = () => {
+  // Live Broadcast Random Picker to All Members
+  const handleRandomPick = async () => {
     if (presentMembersList.length === 0) {
       alert('Please check at least one present member first!');
       return;
@@ -273,18 +295,32 @@ export default function AdminContent() {
     setIsSpinning(true);
     setSelectedPickerMember(null);
 
+    // Initial broadcast: start spinning
+    await broadcastPickerState({
+      isSpinning: true,
+      selectedMember: null,
+      timestamp: Date.now(),
+    });
+
     let counter = 0;
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       const randomIndex = Math.floor(Math.random() * presentMembersList.length);
-      setSelectedPickerMember(presentMembersList[randomIndex]);
+      const chosen = presentMembersList[randomIndex];
+      setSelectedPickerMember(chosen);
       counter++;
 
       if (counter > 15) {
         clearInterval(interval);
         setIsSpinning(false);
+        // Final broadcast: result chosen
+        await broadcastPickerState({
+          isSpinning: false,
+          selectedMember: chosen,
+          timestamp: Date.now(),
+        });
         confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
       }
-    }, 100);
+    }, 120);
   };
 
   const handleGenerateGroups = () => {
@@ -316,7 +352,7 @@ export default function AdminContent() {
     }
   };
 
-  // --- Handlers: Guidelines ---
+  // Guidelines Handlers
   const handleSaveGuidelines = async (e: React.FormEvent) => {
     e.preventDefault();
     setGuidelinesSaving(true);
@@ -334,7 +370,7 @@ export default function AdminContent() {
 
   const handleDeleteGuidelines = async () => {
     const confirmDelete = window.confirm(
-      'Are you sure you want to delete your custom guidelines? The page will revert to standard guidelines.'
+      'Are you sure you want to delete custom guidelines? It will revert to defaults.'
     );
     if (!confirmDelete) return;
 
@@ -351,10 +387,27 @@ export default function AdminContent() {
     }
   };
 
+  const toggleAttendance = (id: string) => {
+    setPresentMemberIds((prev) => {
+      const updated = new Set(prev);
+      if (updated.has(id)) updated.delete(id);
+      else updated.add(id);
+      return updated;
+    });
+  };
+
+  const filteredPickerMembers = members
+    .filter((m) => m.id !== 'ENC-2302')
+    .filter((m) => m.name.toLowerCase().includes(pickerSearch.toLowerCase()));
+
+  const presentMembersList = members
+    .filter((m) => m.id !== 'ENC-2302')
+    .filter((m) => presentMemberIds.has(m.id));
+
   return (
     <div className="space-y-4">
-      {/* 5 Admin Action Tabs (Feedback removed since it's already in the main footer navigation) */}
-      <div className="grid grid-cols-5 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+      {/* 6 Clean Action Tabs */}
+      <div className="grid grid-cols-6 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => setActiveTab('points')}
           className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
@@ -410,6 +463,17 @@ export default function AdminContent() {
           <BookOpen className="w-3.5 h-3.5" />
           <span className="truncate">Guide</span>
         </button>
+        <button
+          onClick={() => setActiveTab('toggles')}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            activeTab === 'toggles'
+              ? 'bg-yellow-400 text-slate-950 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span className="truncate">Toggles</span>
+        </button>
       </div>
 
       {/* --- TAB 1: MANUAL POINTS --- */}
@@ -431,7 +495,7 @@ export default function AdminContent() {
               <label className="text-xs text-slate-300 font-medium">Select Member</label>
               <input
                 type="text"
-                placeholder="Type to filter member names or IDs..."
+                placeholder="Filter member names or IDs..."
                 value={pointsSearch}
                 onChange={(e) => setPointsSearch(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white mb-2"
@@ -509,7 +573,7 @@ export default function AdminContent() {
         </div>
       )}
 
-      {/* --- TAB 2: SESSIONS & ATTENDANCE STREAKS --- */}
+      {/* --- TAB 2: SESSIONS & ATTENDANCE --- */}
       {activeTab === 'sessions' && (
         <div className="space-y-4">
           <form
@@ -642,7 +706,7 @@ export default function AdminContent() {
         </div>
       )}
 
-      {/* --- TAB 3: MEMBERS DIRECTORY, PRESTIGE BADGES & CSV --- */}
+      {/* --- TAB 3: MEMBERS DIRECTORY, BADGES & CSV --- */}
       {activeTab === 'members' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/80">
@@ -655,10 +719,11 @@ export default function AdminContent() {
             </div>
 
             <button
+              type="button"
               onClick={handleExportCSV}
-              className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all"
+              className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-4 h-4" />
               <span>Export CSV</span>
             </button>
           </div>
@@ -771,22 +836,24 @@ export default function AdminContent() {
                         )}
                       </div>
                       <span className="text-[10px] text-slate-400 font-mono block truncate">
-                        {m.id} • {m.email}
+                        {m.id} • {m.email || 'No email registered'}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
+                      type="button"
                       onClick={() => handleOpenEdit(m)}
-                      className="p-2 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-yellow-400 transition-colors"
+                      className="p-2.5 rounded-xl bg-slate-700/60 hover:bg-slate-700 text-yellow-400 transition-colors cursor-pointer"
                       title="Edit Profile & Badge"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleDeleteMember(m)}
-                      className="p-2 rounded-xl bg-slate-700/60 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                      className="p-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
                       title="Delete Member"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -798,25 +865,25 @@ export default function AdminContent() {
         </div>
       )}
 
-      {/* --- TAB 4: SESSION PICKER & RANDOM GROUPS --- */}
+      {/* --- TAB 4: SESSION PICKER & REAL-TIME BROADCAST --- */}
       {activeTab === 'picker' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={handleRandomPick}
               disabled={isSpinning || presentMembersList.length === 0}
-              className="p-3 bg-gradient-to-br from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 text-slate-950 font-bold rounded-2xl flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
+              className="p-3.5 bg-gradient-to-br from-yellow-500 to-amber-600 hover:from-yellow-400 hover:to-amber-500 text-slate-950 font-bold rounded-2xl flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
             >
               <Sparkles className="w-5 h-5" />
               <span className="text-xs">
-                {isSpinning ? 'Spinning...' : 'Random Pick'}
+                {isSpinning ? 'Broadcasting Spin...' : 'Random Pick (Live Pop-up)'}
               </span>
             </button>
 
             <button
               onClick={handleGenerateGroups}
               disabled={presentMembersList.length < 2}
-              className="p-3 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold rounded-2xl flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
+              className="p-3.5 bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white font-bold rounded-2xl flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
             >
               <Users className="w-5 h-5" />
               <span className="text-xs">Random Groups</span>
@@ -826,7 +893,7 @@ export default function AdminContent() {
           {selectedPickerMember && (
             <div className="p-4 bg-yellow-500/10 border-2 border-yellow-400 rounded-2xl text-center space-y-2 animate-bounce-short">
               <span className="text-[10px] font-bold uppercase tracking-wider text-yellow-400">
-                🎉 Selected Participant
+                🎉 Selected Participant (Broadcasted to All Screens)
               </span>
               <div className="flex items-center justify-center gap-3">
                 <BotAvatar config={selectedPickerMember.avatar} size="lg" />
@@ -976,7 +1043,7 @@ export default function AdminContent() {
         </div>
       )}
 
-      {/* --- TAB 5: EDITABLE & DELETABLE GUIDELINES --- */}
+      {/* --- TAB 5: EDITABLE GUIDELINES --- */}
       {activeTab === 'guidelines' && (
         <form onSubmit={handleSaveGuidelines} className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3">
           <div className="flex items-center justify-between">
@@ -1023,6 +1090,69 @@ export default function AdminContent() {
             )}
           </div>
         </form>
+      )}
+
+      {/* --- TAB 6: SECTION TOGGLES (ENABLE/DISABLE SECTIONS) --- */}
+      {activeTab === 'toggles' && (
+        <div className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-4">
+          <div>
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <SlidersHorizontal className="w-4 h-4 text-yellow-400" />
+              <span>Section Visibility Toggles</span>
+            </h3>
+            <p className="text-[10px] text-slate-400">
+              Disable or enable app sections in real-time across all member devices
+            </p>
+          </div>
+
+          {togglesMsg && (
+            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-xl font-medium">
+              {togglesMsg}
+            </div>
+          )}
+
+          <div className="space-y-2.5">
+            {/* Toggle 1: Feedback Page */}
+            <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <MessageSquareHeart className="w-4 h-4 text-amber-400" />
+                <div>
+                  <span className="text-xs font-bold text-white block">Feedback Center</span>
+                  <span className="text-[10px] text-slate-400">
+                    {toggles.feedbackEnabled ? 'Active in footer navigation' : 'Hidden from members'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggle('feedbackEnabled')}
+                className={`p-1 text-2xl transition-colors ${toggles.feedbackEnabled ? 'text-yellow-400' : 'text-slate-600'}`}
+              >
+                {toggles.feedbackEnabled ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+              </button>
+            </div>
+
+            {/* Toggle 2: Game Center */}
+            <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Gamepad2 className="w-4 h-4 text-yellow-400" />
+                <div>
+                  <span className="text-xs font-bold text-white block">Game Center (Coming Soon)</span>
+                  <span className="text-[10px] text-slate-400">
+                    {toggles.gameCenterEnabled ? 'Active in footer navigation' : 'Hidden from members'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleToggle('gameCenterEnabled')}
+                className={`p-1 text-2xl transition-colors ${toggles.gameCenterEnabled ? 'text-yellow-400' : 'text-slate-600'}`}
+              >
+                {toggles.gameCenterEnabled ? <ToggleRight className="w-8 h-8" /> : <ToggleLeft className="w-8 h-8" />}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
