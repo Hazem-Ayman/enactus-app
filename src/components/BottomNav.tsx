@@ -1,18 +1,43 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Trophy, MessageSquareHeart, BookOpen, Shield } from 'lucide-react';
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    // Check if current logged-in user is coordinator admin
+    const checkAdmin = () => {
+      const saved = localStorage.getItem('enactus_member');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.id === 'ENC-2302' || parsed.role === 'admin') {
+            setIsAdmin(true);
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      setIsAdmin(false);
+    };
+
+    checkAdmin();
+    window.addEventListener('storage', checkAdmin);
+    return () => window.removeEventListener('storage', checkAdmin);
+  }, [pathname]);
 
   const navItems = [
     { name: 'Home', href: '/', icon: Home },
     { name: 'Feedback', href: '/feedback', icon: MessageSquareHeart },
     { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
     { name: 'Guide', href: '/guidelines', icon: BookOpen },
-    { name: 'Admin', href: '/admin', icon: Shield },
+    ...(isAdmin ? [{ name: 'Admin', href: '/admin', icon: Shield }] : []),
   ];
 
   return (
@@ -40,3 +65,4 @@ export default function BottomNav() {
     </nav>
   );
 }
+

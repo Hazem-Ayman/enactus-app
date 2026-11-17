@@ -89,7 +89,7 @@ export default function AdminPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPass = process.env.NEXT_PUBLIC_ADMIN_SECRET_PASSWORD || 'enactus2026admin';
+    const correctPass = '23022006Ha#';
     if (passwordInput === correctPass) {
       setIsAuthenticated(true);
       sessionStorage.setItem('enactus_admin_auth', 'true');

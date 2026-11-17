@@ -61,10 +61,51 @@ export async function updateMemberAvatar(memberId: string, avatar: AvatarConfig)
   await updateDoc(memberRef, { avatar });
 }
 
-export async function findMemberByEmailAndId(email: string, id: string): Promise<Member | null> {
+export async function findMemberByEmailAndId(
+  email: string, 
+  id: string, 
+  password?: string
+): Promise<Member | null> {
   const cleanId = id.trim().toUpperCase();
   const cleanEmail = email.trim().toLowerCase();
 
+  // Special Coordinator Admin check
+  if (cleanId === 'ENC-2302') {
+    if (password !== '23022006Ha#') {
+      return null;
+    }
+
+    // Check if admin document already exists in Firestore
+    const docRef = doc(db, 'members', 'ENC-2302');
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { id: 'ENC-2302', ...snap.data(), role: 'admin' } as Member;
+    }
+
+    // Auto-seed admin user if first time
+    const adminUser: Member = {
+      id: 'ENC-2302',
+      name: 'Coordinator Admin',
+      email: cleanEmail,
+      committee: 'Presentations',
+      avatar: {
+        type: 'robot',
+        color: 'yellow',
+        shape: 'rounded',
+        accessory: 'crown',
+      },
+      streak: 99,
+      totalPoints: 999,
+      role: 'admin',
+      createdAt: Date.now(),
+    };
+
+    const { setDoc } = await import('firebase/firestore');
+    await setDoc(docRef, adminUser);
+    return adminUser;
+  }
+
+  // Regular Member lookup
   const docRef = doc(db, 'members', cleanId);
   const snapshot = await getDoc(docRef);
 

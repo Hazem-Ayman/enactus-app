@@ -27,7 +27,9 @@ import {
   KeyRound,
   Mail,
   User,
-  Palette
+  Palette,
+  Shield,
+  Lock
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -42,9 +44,10 @@ export default function HomePage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
 
-  // Login Form: Email + ID
+  // Login Form: Email + ID (+ Password if Admin ID)
   const [loginEmail, setLoginEmail] = useState('');
   const [loginId, setLoginId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   // Pop-up Avatar & Permanent ID Modal
   const [showCustomizer, setShowCustomizer] = useState(false);
@@ -135,15 +138,23 @@ export default function HomePage() {
     e.preventDefault();
     if (!loginEmail.trim() || !loginId.trim()) return;
 
+    if (loginId.trim().toUpperCase() === 'ENC-2302' && !loginPassword.trim()) {
+      setErrorMsg('Please enter your Coordinator Admin password.');
+      return;
+    }
+
     setSubmitting(true);
     setErrorMsg('');
 
     try {
-      const found = await findMemberByEmailAndId(loginEmail, loginId);
+      const found = await findMemberByEmailAndId(loginEmail, loginId, loginPassword);
       if (!found) {
-        setErrorMsg('Invalid email or Member ID. Please double-check both.');
+        setErrorMsg('Invalid credentials. Please verify your email, ID, or password.');
       } else {
         localStorage.setItem('enactus_member', JSON.stringify(found));
+        if (found.role === 'admin' || found.id === 'ENC-2302') {
+          sessionStorage.setItem('enactus_admin_auth', 'true');
+        }
         setCurrentMember(found);
       }
     } catch (err: any) {
@@ -289,6 +300,29 @@ export default function HomePage() {
 
         {/* Quick Action Buttons */}
         <div className="space-y-2">
+          {/* Coordinator Portal Banner if Logged In as Admin */}
+          {(currentMember.role === 'admin' || currentMember.id === 'ENC-2302') && (
+            <Link
+              href="/admin"
+              className="flex items-center justify-between p-4 bg-gradient-to-r from-yellow-500/20 via-amber-500/20 to-orange-500/20 border-2 border-yellow-400/50 rounded-2xl transition-all hover:scale-[1.01] shadow-lg"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-yellow-400 text-slate-950 font-bold">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-yellow-400">
+                    Coordinator Admin Panel
+                  </h3>
+                  <p className="text-[11px] text-slate-300">
+                    Manage sessions, attendance streaks & manual points
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-yellow-400" />
+            </Link>
+          )}
+
           <Link
             href="/feedback"
             className="flex items-center justify-between p-4 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-2xl transition-all group"
@@ -461,13 +495,37 @@ export default function HomePage() {
             />
           </div>
 
+          {/* Conditional Admin Password Field */}
+          {loginId.trim().toUpperCase() === 'ENC-2302' && (
+            <div className="space-y-1 animate-fadeIn">
+              <label className="text-xs text-yellow-400 font-bold flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5" />
+                <span>Coordinator Password</span>
+              </label>
+              <input
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="Enter coordinator secret password"
+                className="w-full px-3.5 py-2.5 bg-slate-900 border-2 border-yellow-400/50 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                required
+              />
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={submitting}
             className="w-full py-3 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 mt-2"
           >
             <LogIn className="w-4 h-4" />
-            <span>{submitting ? 'Authenticating...' : 'Sign In with Email & ID'}</span>
+            <span>
+              {submitting
+                ? 'Authenticating...'
+                : loginId.trim().toUpperCase() === 'ENC-2302'
+                ? 'Sign In as Coordinator'
+                : 'Sign In with Email & ID'}
+            </span>
           </button>
         </form>
       )}

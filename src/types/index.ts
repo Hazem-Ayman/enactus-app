@@ -9,13 +9,14 @@ export interface AvatarConfig {
 }
 
 export interface Member {
-  id: string; // Auto-generated short unique ID (e.g. EN-8492)
+  id: string; // Auto-generated short unique ID (e.g. EN-8492) or ENC-2302
   name: string;
   email: string;
   committee: Committee;
   avatar: AvatarConfig;
   streak: number; // consecutive attended sessions
   totalPoints: number;
+  role?: 'member' | 'admin';
   createdAt: number;
 }
 
