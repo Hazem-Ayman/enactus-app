@@ -128,25 +128,39 @@ export async function markAttendance(
     if (!memberSnap.exists()) continue;
     const currentStreak = memberSnap.data().streak || 0;
 
-    if (record.status === 'present' || record.status === 'late') {
+    if (record.status === 'present') {
       const newStreak = currentStreak + 1;
-      let bonusPoints = record.status === 'present' ? 10 : 5; // Arrival points
-
-      // Milestone streak bonuses at 3, 5, 7 sessions (Priority 2)
-      if (newStreak === 3) bonusPoints += 15;
-      else if (newStreak === 5) bonusPoints += 25;
-      else if (newStreak === 7) bonusPoints += 50;
+      // Bonus formula: Base 10 points for attending + (streak * 5) bonus for EVERY streak session!
+      // Streak 1: 10 + 5 = 15 pts
+      // Streak 2: 10 + 10 = 20 pts
+      // Streak 3: 10 + 15 = 25 pts
+      // Streak 4: 10 + 20 = 30 pts, etc.
+      const streakBonus = newStreak * 5;
+      const totalSessionPoints = 10 + streakBonus;
 
       await updateDoc(memberRef, {
         streak: newStreak,
-        totalPoints: increment(bonusPoints),
+        totalPoints: increment(totalSessionPoints),
       });
 
       await addDoc(collection(db, 'point_events'), {
         memberId: record.memberId,
         memberName: record.memberName,
-        amount: bonusPoints,
-        reason: `Attended session (${record.status}) • Streak: ${newStreak} 🔥`,
+        amount: totalSessionPoints,
+        reason: `Session Present (+10 pts) + Streak #${newStreak} Bonus (+${streakBonus} pts) 🔥`,
+        createdAt: Date.now(),
+      });
+    } else if (record.status === 'late') {
+      // Late: ONLY 5 base points. NO streak bonus, and streak does not advance.
+      await updateDoc(memberRef, {
+        totalPoints: increment(5),
+      });
+
+      await addDoc(collection(db, 'point_events'), {
+        memberId: record.memberId,
+        memberName: record.memberName,
+        amount: 5,
+        reason: 'Session Attendance (Late arrival: +5 pts, no streak bonus)',
         createdAt: Date.now(),
       });
     } else if (record.status === 'absent') {

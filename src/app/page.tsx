@@ -89,6 +89,7 @@ export default function HomePage() {
     try {
       // Create member with default bot avatar config
       const defaultAvatar: AvatarConfig = {
+        type: 'robot',
         color: 'blue',
         shape: 'rounded',
         accessory: 'antenna',
@@ -252,11 +253,11 @@ export default function HomePage() {
               </span>
             </div>
 
-            {/* Visual Star Track for Attendance */}
+            {/* Visual Star Track for Attendance with bonus for EVERY session */}
             <div className="flex items-center justify-between pt-1">
               {[1, 2, 3, 4, 5, 6, 7].map((num) => {
                 const isEarned = streakCount >= num;
-                const isMilestone = num === 3 || num === 5 || num === 7;
+                const bonusPoints = num * 5; // Streak bonus increases every session
 
                 return (
                   <div key={num} className="flex flex-col items-center gap-1">
@@ -273,17 +274,15 @@ export default function HomePage() {
                         <span className="text-[10px] font-bold">{num}</span>
                       )}
                     </div>
-                    {isMilestone && (
-                      <span className="text-[8px] font-bold text-amber-400">
-                        {num === 3 ? '+15' : num === 5 ? '+25' : '+50'}
-                      </span>
-                    )}
+                    <span className={`text-[8px] font-bold ${isEarned ? 'text-amber-400' : 'text-slate-500'}`}>
+                      +{bonusPoints}
+                    </span>
                   </div>
                 );
               })}
             </div>
             <p className="text-[10px] text-slate-400 text-center pt-1">
-              Milestone bonus points unlocked at 3, 5, and 7 consecutive sessions!
+              Earn an extra bonus (+5, +10, +15, +20...) for <strong>every consecutive session</strong> attended on time!
             </p>
           </div>
         </div>

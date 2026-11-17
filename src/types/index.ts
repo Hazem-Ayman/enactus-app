@@ -1,9 +1,11 @@
 export type Committee = 'Presentations';
 
 export interface AvatarConfig {
-  color: string; // e.g. 'blue', 'orange', 'pink', 'purple', 'green', 'red'
+  type: 'robot' | 'human' | 'monster' | 'alien'; // Character Archetype
+  color: string; // e.g. 'blue', 'orange', 'pink', 'purple', 'green', 'red', 'yellow'
   shape: 'circle' | 'square' | 'rounded'; // Head shape
-  accessory: 'none' | 'glasses' | 'sunglasses' | 'antenna' | 'horns' | 'vr' | 'heart_eyes'; // What to wear on face
+  accessory: 'none' | 'glasses' | 'sunglasses' | 'antenna' | 'horns' | 'vr' | 'heart_eyes' | 'cap' | 'crown' | 'mask'; // What to wear
+  expression?: 'smile' | 'cool' | 'wink' | 'open'; // Face expression
 }
 
 export interface Member {

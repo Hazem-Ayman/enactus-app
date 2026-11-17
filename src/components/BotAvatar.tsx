@@ -17,7 +17,7 @@ const colorMaps: Record<string, { bg: string; border: string; glow: string; text
   purple: { bg: 'bg-purple-600', border: 'border-purple-300', glow: 'shadow-purple-500/50', text: 'text-purple-950' },
   green: { bg: 'bg-emerald-500', border: 'border-emerald-300', glow: 'shadow-emerald-500/50', text: 'text-emerald-950' },
   red: { bg: 'bg-rose-600', border: 'border-rose-300', glow: 'shadow-rose-500/50', text: 'text-rose-950' },
-  slate: { bg: 'bg-slate-500', border: 'border-slate-300', glow: 'shadow-slate-500/50', text: 'text-slate-950' },
+  yellow: { bg: 'bg-yellow-400', border: 'border-yellow-200', glow: 'shadow-yellow-400/50', text: 'text-yellow-950' },
 };
 
 export default function BotAvatar({
@@ -26,10 +26,11 @@ export default function BotAvatar({
   size = 'md',
   className = '',
 }: BotAvatarProps) {
-  // Fallback defaults if avatar config is not yet set
+  const type = config?.type || 'robot';
   const color = config?.color || 'blue';
   const shape = config?.shape || 'rounded';
   const accessory = config?.accessory || 'none';
+  const expression = config?.expression || 'smile';
 
   const colorStyle = colorMaps[color] || colorMaps.blue;
 
@@ -51,70 +52,156 @@ export default function BotAvatar({
     <div
       className={`relative inline-flex items-center justify-center flex-shrink-0 select-none ${sizeClasses[size]} ${className}`}
     >
-      {/* Top Antenna / Ears / Horns */}
+      {/* Accessory: Cap */}
+      {accessory === 'cap' && (
+        <div className="absolute -top-2 z-20 flex flex-col items-center">
+          <div className="w-8 h-2.5 bg-rose-600 rounded-t-full border border-rose-400" />
+          <div className="w-10 h-1 bg-rose-700 rounded-full" />
+        </div>
+      )}
+
+      {/* Accessory: Crown */}
+      {accessory === 'crown' && (
+        <div className="absolute -top-2.5 z-20 text-yellow-300 text-xs filter drop-shadow">
+          👑
+        </div>
+      )}
+
+      {/* Accessory: Antenna (for Robots / Aliens) */}
       {accessory === 'antenna' && (
-        <div className="absolute -top-1.5 z-10 flex flex-col items-center">
+        <div className="absolute -top-2 z-10 flex flex-col items-center">
           <span className="w-1.5 h-1.5 rounded-full bg-yellow-300 shadow-sm animate-pulse" />
           <span className="w-0.5 h-1.5 bg-slate-400" />
         </div>
       )}
 
+      {/* Accessory: Horns (for Monster) */}
       {accessory === 'horns' && (
-        <div className="absolute -top-1 z-10 w-full flex justify-between px-1.5">
-          <span className="w-1.5 h-2 bg-yellow-400 rounded-t-full transform -rotate-12" />
-          <span className="w-1.5 h-2 bg-yellow-400 rounded-t-full transform rotate-12" />
+        <div className="absolute -top-1.5 z-10 w-full flex justify-between px-1">
+          <span className="w-1.5 h-2.5 bg-amber-400 rounded-t-full transform -rotate-12" />
+          <span className="w-1.5 h-2.5 bg-amber-400 rounded-t-full transform rotate-12" />
         </div>
       )}
 
-      {/* Robot Head */}
+      {/* Head Container */}
       <div
         className={`w-full h-full ${shapeClass} ${colorStyle.bg} border-2 ${colorStyle.border} shadow-md ${colorStyle.glow} flex flex-col items-center justify-center relative overflow-hidden transition-all`}
       >
-        {/* Screen/Face visor background */}
-        <div className="w-[82%] h-[68%] bg-slate-950/80 rounded-lg flex flex-col items-center justify-center relative border border-white/10 px-1">
-          {/* Accessories: Sunglasses / Glasses / VR */}
-          {accessory === 'sunglasses' && (
-            <div className="absolute inset-x-1 top-1.5 h-3 bg-black border border-slate-600 rounded-sm flex items-center justify-around z-10 shadow-sm">
-              <span className="w-1.5 h-1 bg-cyan-400/80 rounded-full" />
-              <span className="w-1.5 h-1 bg-cyan-400/80 rounded-full" />
-            </div>
-          )}
+        {/* CHARACTER TYPE: ROBOT */}
+        {type === 'robot' && (
+          <div className="w-[82%] h-[68%] bg-slate-950/85 rounded-lg flex flex-col items-center justify-center relative border border-white/10 px-1">
+            {/* Sunglasses / Glasses / VR */}
+            {accessory === 'sunglasses' && (
+              <div className="absolute inset-x-1 top-1.5 h-3 bg-black border border-slate-600 rounded-sm flex items-center justify-around z-10">
+                <span className="w-1.5 h-1 bg-cyan-400/80 rounded-full" />
+                <span className="w-1.5 h-1 bg-cyan-400/80 rounded-full" />
+              </div>
+            )}
+            {accessory === 'glasses' && (
+              <div className="absolute inset-x-0.5 top-1.5 h-3.5 border-2 border-amber-300 rounded-md flex items-center justify-around z-10">
+                <span className="w-2 h-2 rounded-full border border-amber-300" />
+                <span className="w-1 h-0.5 bg-amber-300" />
+                <span className="w-2 h-2 rounded-full border border-amber-300" />
+              </div>
+            )}
+            {accessory === 'vr' && (
+              <div className="absolute inset-x-0.5 top-1 h-3.5 bg-purple-900 border border-purple-400 rounded-md flex items-center justify-center z-10">
+                <span className="w-4 h-1 bg-cyan-300 rounded-full animate-pulse" />
+              </div>
+            )}
 
-          {accessory === 'glasses' && (
-            <div className="absolute inset-x-0.5 top-1.5 h-3.5 border-2 border-amber-300 rounded-md flex items-center justify-around z-10">
-              <span className="w-2 h-2 rounded-full border border-amber-300" />
-              <span className="w-1 h-0.5 bg-amber-300" />
-              <span className="w-2 h-2 rounded-full border border-amber-300" />
-            </div>
-          )}
+            {/* Robot Eyes */}
+            {accessory !== 'sunglasses' && accessory !== 'vr' && (
+              <div className="flex items-center justify-between w-full px-1">
+                {accessory === 'heart_eyes' ? (
+                  <>
+                    <span className="text-[10px] text-pink-400 leading-none">❤️</span>
+                    <span className="text-[10px] text-pink-400 leading-none">❤️</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_5px_#22d3ee]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_5px_#22d3ee]" />
+                  </>
+                )}
+              </div>
+            )}
+            <div className="mt-1 w-2.5 h-0.5 bg-cyan-200/90 rounded-full" />
+          </div>
+        )}
 
-          {accessory === 'vr' && (
-            <div className="absolute inset-x-0.5 top-1 h-3.5 bg-purple-900 border border-purple-400 rounded-md flex items-center justify-center z-10">
-              <span className="w-4 h-1 bg-cyan-300 rounded-full animate-pulse" />
-            </div>
-          )}
+        {/* CHARACTER TYPE: HUMAN */}
+        {type === 'human' && (
+          <div className="w-full h-full flex flex-col items-center justify-center relative">
+            {/* Hair Top */}
+            <div className="absolute top-0 inset-x-0 h-2 bg-slate-900 rounded-t-xl" />
 
-          {/* Eyes (if not covered by sunglasses or VR) */}
-          {accessory !== 'sunglasses' && accessory !== 'vr' && (
-            <div className="flex items-center justify-between w-full px-1 z-0">
-              {accessory === 'heart_eyes' ? (
-                <>
-                  <span className="text-[10px] text-pink-400 leading-none">❤️</span>
-                  <span className="text-[10px] text-pink-400 leading-none">❤️</span>
-                </>
-              ) : (
-                <>
-                  {/* Digital Pixel / Glowing Eye */}
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_5px_#22d3ee]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 shadow-[0_0_5px_#22d3ee]" />
-                </>
-              )}
-            </div>
-          )}
+            {/* Glasses / Sunglasses */}
+            {accessory === 'sunglasses' ? (
+              <div className="w-6 h-2.5 bg-slate-950 border border-slate-700 rounded-sm mt-1 z-10 shadow-sm" />
+            ) : accessory === 'glasses' ? (
+              <div className="w-6 h-3 border-2 border-amber-300 rounded-md flex items-center justify-around z-10 mt-1">
+                <span className="w-2 h-2 rounded-full border border-amber-300" />
+                <span className="w-2 h-2 rounded-full border border-amber-300" />
+              </div>
+            ) : (
+              /* Eyes */
+              <div className="flex items-center justify-between w-5 mt-1 z-0">
+                {accessory === 'heart_eyes' ? (
+                  <>
+                    <span className="text-[9px] text-pink-500">❤️</span>
+                    <span className="text-[9px] text-pink-500">❤️</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                  </>
+                )}
+              </div>
+            )}
 
-          {/* Smile or speaker mouth */}
-          <div className="mt-1 w-2.5 h-0.5 bg-cyan-200/90 rounded-full" />
-        </div>
+            {/* Human Smile */}
+            <div className="mt-1 w-3 h-1 border-b-2 border-slate-950 rounded-full" />
+          </div>
+        )}
+
+        {/* CHARACTER TYPE: MONSTER */}
+        {type === 'monster' && (
+          <div className="w-full h-full flex flex-col items-center justify-center relative">
+            {/* Monster 3 Eyes or Cyclops */}
+            <div className="flex items-center justify-center gap-1 mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-white border border-slate-900 flex items-center justify-center">
+                <span className="w-0.5 h-0.5 bg-slate-950 rounded-full" />
+              </span>
+              <span className="w-2.5 h-2.5 rounded-full bg-white border border-slate-900 flex items-center justify-center shadow-sm">
+                <span className="w-1 h-1 bg-yellow-400 rounded-full" />
+              </span>
+              <span className="w-1.5 h-1.5 rounded-full bg-white border border-slate-900 flex items-center justify-center">
+                <span className="w-0.5 h-0.5 bg-slate-950 rounded-full" />
+              </span>
+            </div>
+
+            {/* Monster Mouth with Sharp Teeth */}
+            <div className="mt-1 w-4 h-2 bg-slate-950 rounded-md flex items-center justify-around px-0.5">
+              <span className="w-1 h-1 bg-white transform rotate-45" />
+              <span className="w-1 h-1 bg-white transform rotate-45" />
+            </div>
+          </div>
+        )}
+
+        {/* CHARACTER TYPE: ALIEN */}
+        {type === 'alien' && (
+          <div className="w-full h-full flex flex-col items-center justify-center relative">
+            {/* Slanted Big Black Alien Eyes */}
+            <div className="flex items-center justify-between w-6 mt-1">
+              <span className="w-2.5 h-3.5 bg-slate-950 rounded-full transform -rotate-12 shadow-sm" />
+              <span className="w-2.5 h-3.5 bg-slate-950 rounded-full transform rotate-12 shadow-sm" />
+            </div>
+            {/* Tiny alien mouth */}
+            <div className="mt-1 w-1.5 h-1 bg-slate-950 rounded-full" />
+          </div>
+        )}
       </div>
     </div>
   );
