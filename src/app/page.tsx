@@ -422,11 +422,10 @@ export default function HomePage() {
                 return (
                   <div key={num} className="flex flex-col items-center gap-1">
                     <div
-                      className={`w-7 h-7 rounded-xl flex items-center justify-center border transition-all ${
-                        isEarned
-                          ? 'bg-yellow-400 border-yellow-300 text-slate-950 font-black shadow-md shadow-yellow-500/30 scale-105'
-                          : 'bg-slate-900 border-slate-800 text-slate-600'
-                      }`}
+                      className={`w-7 h-7 rounded-xl flex items-center justify-center border transition-all ${isEarned
+                        ? 'bg-yellow-400 border-yellow-300 text-slate-950 font-black shadow-md shadow-yellow-500/30 scale-105'
+                        : 'bg-slate-900 border-slate-800 text-slate-600'
+                        }`}
                     >
                       {isEarned ? (
                         <Star className="w-4 h-4 fill-slate-950 text-slate-950" />

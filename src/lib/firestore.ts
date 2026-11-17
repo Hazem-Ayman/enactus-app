@@ -1,18 +1,18 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  getDoc, 
-  doc, 
-  query, 
-  where, 
-  orderBy, 
-  updateDoc, 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  getDoc,
+  doc,
+  query,
+  where,
+  orderBy,
+  updateDoc,
   deleteDoc,
   setDoc,
   onSnapshot,
-  increment, 
-  serverTimestamp 
+  increment,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { Member, PointEvent, Committee, Feedback, SessionFeedback, AvatarConfig, Session, AttendanceRecord, SavedGroup, BuddyConnection } from '@/types';
@@ -25,8 +25,8 @@ export function generateMemberId(): string {
 
 // Check if Firebase is properly configured
 export const isFirebaseConfigured = () => {
-  return !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && 
-         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'your_project_id';
+  return !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID &&
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== 'your_project_id';
 };
 
 // --- Members API ---
@@ -63,7 +63,7 @@ export async function updateMemberAvatar(memberId: string, avatar: AvatarConfig)
 }
 
 export async function updateMemberProfile(
-  memberId: string, 
+  memberId: string,
   data: { name: string; email: string; titleBadge?: string }
 ): Promise<void> {
   const memberRef = doc(db, 'members', memberId);
@@ -192,8 +192,8 @@ export async function awardTitleBadge(memberId: string, titleBadge: string): Pro
 }
 
 export async function findMemberByEmailAndId(
-  email: string, 
-  id: string, 
+  email: string,
+  id: string,
   password?: string
 ): Promise<Member | null> {
   const cleanId = id.trim().toUpperCase();
@@ -405,9 +405,9 @@ export async function clearSessionAttendance(sessionId: string): Promise<void> {
 // --- Points API ---
 
 export async function addPointEvent(
-  memberId: string, 
-  memberName: string, 
-  amount: number, 
+  memberId: string,
+  memberName: string,
+  amount: number,
   reason: string
 ): Promise<void> {
   // 1. Add Point Event entry
@@ -473,7 +473,16 @@ export async function updateGuidelinesContent(content: string): Promise<void> {
 
 export async function deleteGuidelinesContent(): Promise<void> {
   const docRef = doc(db, 'settings', 'guidelines');
-  await deleteDoc(docRef);
+  try {
+    await deleteDoc(docRef);
+  } catch (e) {
+    console.warn('deleteDoc error:', e);
+  }
+  try {
+    await setDoc(docRef, { content: '', updatedAt: Date.now() });
+  } catch (e) {
+    console.warn('setDoc empty guidelines error:', e);
+  }
 }
 
 // --- Priority 4: Buddy System via Code / QR ---

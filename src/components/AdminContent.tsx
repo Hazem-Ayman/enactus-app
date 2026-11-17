@@ -109,8 +109,8 @@ export default function AdminContent() {
         (m) =>
           m.id !== 'ENC-2302' &&
           (m.name.toLowerCase() === q ||
-           m.id.toLowerCase() === q ||
-           m.name.toLowerCase().includes(q))
+            m.id.toLowerCase() === q ||
+            m.name.toLowerCase().includes(q))
       );
     }
 
@@ -616,11 +616,10 @@ export default function AdminContent() {
                   <div
                     key={m.id}
                     onClick={() => toggleAttendance(m.id)}
-                    className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all border ${
-                      isChecked
-                        ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
-                        : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800'
-                    }`}
+                    className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all border ${isChecked
+                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800'
+                      }`}
                   >
                     <div className="flex items-center gap-2">
                       {isChecked ? (

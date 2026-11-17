@@ -27,6 +27,7 @@ export default function GuidelinesPage() {
   const [editText, setEditText] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -70,17 +71,15 @@ export default function GuidelinesPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm('Delete custom guidelines? It will revert back to standard defaults.')) {
-      return;
-    }
+  const handleConfirmDelete = async () => {
     setSaving(true);
     try {
       await deleteGuidelinesContent();
       setCustomContent(null);
       setEditText('');
       setIsEditing(false);
-      setMsg('Custom guidelines deleted.');
+      setShowDeleteModal(false);
+      setMsg('Custom guidelines deleted successfully!');
       setTimeout(() => setMsg(''), 4000);
     } catch (err: any) {
       alert('Error deleting guidelines: ' + err.message);
@@ -163,7 +162,7 @@ export default function GuidelinesPage() {
             {customContent && (
               <button
                 type="button"
-                onClick={handleDelete}
+                onClick={() => setShowDeleteModal(true)}
                 disabled={saving}
                 className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
               >
@@ -173,6 +172,41 @@ export default function GuidelinesPage() {
             )}
           </div>
         </form>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="max-w-xs w-full bg-slate-900 border border-rose-500/50 rounded-3xl p-5 space-y-4 shadow-2xl text-center">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-sm text-white">Delete Custom Guidelines?</h3>
+              <p className="text-xs text-slate-300">
+                This will remove your custom announcements and revert the page back to the standard presentations guidelines.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={handleConfirmDelete}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl text-xs transition-all shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {saving ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* If custom coordinator guidelines exist, show them prominently */}
