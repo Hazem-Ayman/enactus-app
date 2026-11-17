@@ -152,6 +152,63 @@ export function subscribeToLiveGroups(callback: (data: LiveGroupsState | null) =
   });
 }
 
+// --- Real-time Game Center Broadcast & Audience Voting ---
+
+export interface LiveGameState {
+  activeGame: 'hub' | 'impromptu' | 'hottake' | 'pitch' | 'emotion' | 'bomb' | 'debate';
+  selectedSpeaker: Member | null;
+  selectedSpeakerB?: Member | null;
+  prompt?: string;
+  product?: { name: string; pitch: string } | null;
+  bomb?: { topic: string; banned: string[] } | null;
+  debate?: { topic: string; sideA: string; sideB: string } | null;
+  duration: number;
+  timeLeft: number;
+  isRunning: boolean;
+  isFinished: boolean;
+  bombExploded: boolean;
+  debateTurn?: 'A' | 'B';
+  votes?: { [memberId: string]: string }; // Member votes e.g. "A" | "B" or star ratings
+  reactions?: { [type: string]: number }; // Reaction tally
+  updatedAt: number;
+}
+
+export async function broadcastGameState(data: LiveGameState): Promise<void> {
+  const docRef = doc(db, 'settings', 'live_game');
+  await setDoc(docRef, data);
+}
+
+export function subscribeToLiveGame(callback: (data: LiveGameState | null) => void) {
+  const docRef = doc(db, 'settings', 'live_game');
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      callback(snap.data() as LiveGameState);
+    } else {
+      callback(null);
+    }
+  });
+}
+
+export async function castGameVote(memberId: string, vote: string): Promise<void> {
+  const docRef = doc(db, 'settings', 'live_game');
+  await updateDoc(docRef, {
+    [`votes.${memberId}`]: vote,
+    updatedAt: Date.now(),
+  }).catch(async () => {
+    await setDoc(docRef, { votes: { [memberId]: vote }, updatedAt: Date.now() }, { merge: true });
+  });
+}
+
+export async function sendGameReaction(reaction: string): Promise<void> {
+  const docRef = doc(db, 'settings', 'live_game');
+  await updateDoc(docRef, {
+    [`reactions.${reaction}`]: increment(1),
+    updatedAt: Date.now(),
+  }).catch(async () => {
+    await setDoc(docRef, { reactions: { [reaction]: 1 }, updatedAt: Date.now() }, { merge: true });
+  });
+}
+
 // --- Feature Toggles (Disable/Enable Sections) ---
 
 export interface SectionToggles {

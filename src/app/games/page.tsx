@@ -18,15 +18,27 @@ import {
   Users, 
   Volume2, 
   VolumeX, 
-  ChevronRight,
-  RefreshCw,
-  Drama,
-  Bomb,
-  Swords,
-  ShieldAlert,
-  Trophy
+  ChevronRight, 
+  RefreshCw, 
+  Drama, 
+  Bomb, 
+  Swords, 
+  Trophy, 
+  Eye, 
+  Vote, 
+  ThumbsUp, 
+  Star, 
+  Radio
 } from 'lucide-react';
-import { getAllMembers, addPointEvent } from '@/lib/firestore';
+import { 
+  getAllMembers, 
+  addPointEvent, 
+  broadcastGameState, 
+  subscribeToLiveGame, 
+  castGameVote, 
+  sendGameReaction, 
+  LiveGameState 
+} from '@/lib/firestore';
 import { Member } from '@/types';
 import BotAvatar from '@/components/BotAvatar';
 import confetti from 'canvas-confetti';
@@ -146,11 +158,12 @@ const DEBATE_CHALLENGES = [
 ];
 
 export default function GamesPage() {
-  const [activeGame, setActiveGame] = useState<GameMode>('hub');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentMemberId, setCurrentMemberId] = useState<string>('');
   const [members, setMembers] = useState<Member[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(true);
 
-  // Speaker Selection
+  // Coordinator Game Control State
+  const [activeGame, setActiveGame] = useState<GameMode>('hub');
   const [selectedSpeaker, setSelectedSpeaker] = useState<Member | null>(null);
   const [selectedSpeakerB, setSelectedSpeakerB] = useState<Member | null>(null);
   const [isSpinningSpeaker, setIsSpinningSpeaker] = useState(false);
@@ -168,40 +181,87 @@ export default function GamesPage() {
   const [isFinished, setIsFinished] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
-  // Debate Blitz State
+  // Debate & Word Bomb State
   const [debateTurn, setDebateTurn] = useState<'A' | 'B'>('A');
-
-  // Word Bomb State
   const [bombExploded, setBombExploded] = useState<boolean>(false);
 
-  // Points Awarding
+  // Live Sync State (From Firestore)
+  const [liveState, setLiveState] = useState<LiveGameState | null>(null);
+  const [myVote, setMyVote] = useState<string>('');
   const [pointsSuccess, setPointsSuccess] = useState<string>('');
   const [awardingPoints, setAwardingPoints] = useState<boolean>(false);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    checkRole();
     loadMembers();
+
+    // Subscribe to real-time live game broadcast
+    const unsubscribe = subscribeToLiveGame((data) => {
+      if (data) {
+        setLiveState(data);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
+  const checkRole = () => {
+    try {
+      const saved = localStorage.getItem('enactus_member');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.id) setCurrentMemberId(parsed.id);
+        if (parsed.id === 'ENC-2302' || parsed.role === 'admin') {
+          setIsAdmin(true);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const loadMembers = async () => {
-    setLoadingMembers(true);
     try {
       const all = await getAllMembers();
       const valid = all.filter((m) => m.id !== 'ENC-2302');
       setMembers(valid);
-      if (valid.length > 0) {
+      if (valid.length > 0 && !selectedSpeaker) {
         setSelectedSpeaker(valid[0]);
         if (valid.length > 1) setSelectedSpeakerB(valid[1]);
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoadingMembers(false);
     }
   };
 
-  // Sound Synthesizer via Web Audio API
+  // Broadcast helper for Coordinator
+  const broadcast = async (overrides?: Partial<LiveGameState>) => {
+    if (!isAdmin) return;
+    const payload: LiveGameState = {
+      activeGame,
+      selectedSpeaker,
+      selectedSpeakerB,
+      prompt: currentPrompt,
+      product: currentProduct,
+      bomb: currentBomb,
+      debate: currentDebate,
+      duration,
+      timeLeft,
+      isRunning,
+      isFinished,
+      bombExploded,
+      debateTurn,
+      votes: liveState?.votes || {},
+      reactions: liveState?.reactions || {},
+      updatedAt: Date.now(),
+      ...overrides,
+    };
+    await broadcastGameState(payload);
+  };
+
+  // Web Audio Synthesizer
   const playBeep = (freq = 440, type: OscillatorType = 'sine', durationSec = 0.1) => {
     if (!soundEnabled || typeof window === 'undefined') return;
     try {
@@ -216,28 +276,25 @@ export default function GamesPage() {
       gain.connect(audioCtx.destination);
       osc.start();
       osc.stop(audioCtx.currentTime + durationSec);
-    } catch (e) {
-      // Audio might be blocked until user interacts
-    }
+    } catch (e) {}
   };
 
-  // Timer Tick Mechanism
+  // Timer Tick (Admin side)
   useEffect(() => {
-    if (isRunning && timeLeft > 0) {
+    if (isAdmin && isRunning && timeLeft > 0) {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
-          // Emotion Switch audio cue on 10s phase boundaries
           if (activeGame === 'emotion') {
             if (prev === 31 || prev === 21 || prev === 11) {
               playBeep(650, 'triangle', 0.25);
             }
           }
 
-          // Debate switch at halfway (30s)
           if (activeGame === 'debate' && prev === 31) {
             setDebateTurn('B');
             playBeep(700, 'square', 0.3);
             confetti({ particleCount: 30, spread: 50 });
+            broadcast({ debateTurn: 'B', timeLeft: 30 });
           }
 
           if (prev <= 1) {
@@ -246,12 +303,19 @@ export default function GamesPage() {
             setIsFinished(true);
             playBeep(880, 'triangle', 0.4);
             confetti({ particleCount: 90, spread: 80, origin: { y: 0.6 } });
+            broadcast({ isRunning: false, isFinished: true, timeLeft: 0 });
             return 0;
           }
 
           if (prev <= 4) {
             playBeep(520, 'sine', 0.08);
           }
+
+          // Periodic broadcast sync every 5 seconds
+          if (prev % 5 === 0) {
+            broadcast({ timeLeft: prev - 1 });
+          }
+
           return prev - 1;
         });
       }, 1000);
@@ -261,10 +325,10 @@ export default function GamesPage() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isRunning, timeLeft, activeGame]);
+  }, [isAdmin, isRunning, timeLeft, activeGame]);
 
-  // Select Game Mode
-  const handleLaunchGame = (mode: GameMode) => {
+  // Launch Game Mode (Admin Only)
+  const handleLaunchGame = async (mode: GameMode) => {
     setActiveGame(mode);
     setIsRunning(false);
     setIsFinished(false);
@@ -272,61 +336,97 @@ export default function GamesPage() {
     setPointsSuccess('');
     setDebateTurn('A');
 
+    let d = 60;
+    let p = '';
+    let prod: any = null;
+    let b: any = null;
+    let deb: any = null;
+
     if (mode === 'impromptu') {
-      setDuration(60);
-      setTimeLeft(60);
-      rollImpromptuTopic();
+      d = 60;
+      p = IMPROMPTU_TOPICS[Math.floor(Math.random() * IMPROMPTU_TOPICS.length)];
+      setCurrentPrompt(p);
     } else if (mode === 'hottake') {
-      setDuration(45);
-      setTimeLeft(45);
-      rollHotTake();
+      d = 45;
+      p = HOT_TAKES[Math.floor(Math.random() * HOT_TAKES.length)];
+      setCurrentPrompt(p);
     } else if (mode === 'pitch') {
-      setDuration(30);
-      setTimeLeft(30);
-      rollPitchProduct();
+      d = 30;
+      prod = PITCH_PRODUCTS[Math.floor(Math.random() * PITCH_PRODUCTS.length)];
+      setCurrentProduct(prod);
     } else if (mode === 'emotion') {
-      setDuration(40);
-      setTimeLeft(40);
-      rollEmotionScenario();
+      d = 40;
+      p = EMOTION_SCENARIOS[Math.floor(Math.random() * EMOTION_SCENARIOS.length)];
+      setCurrentPrompt(p);
     } else if (mode === 'bomb') {
-      setDuration(45);
-      setTimeLeft(45);
-      rollWordBomb();
+      d = 45;
+      b = WORD_BOMB_CHALLENGES[Math.floor(Math.random() * WORD_BOMB_CHALLENGES.length)];
+      setCurrentBomb(b);
     } else if (mode === 'debate') {
-      setDuration(60);
-      setTimeLeft(60);
-      rollDebate();
+      d = 60;
+      deb = DEBATE_CHALLENGES[Math.floor(Math.random() * DEBATE_CHALLENGES.length)];
+      setCurrentDebate(deb);
+    }
+
+    setDuration(d);
+    setTimeLeft(d);
+
+    await broadcast({
+      activeGame: mode,
+      duration: d,
+      timeLeft: d,
+      isRunning: false,
+      isFinished: false,
+      bombExploded: false,
+      prompt: p,
+      product: prod,
+      bomb: b,
+      debate: deb,
+      debateTurn: 'A',
+      votes: {},
+      reactions: {},
+    });
+  };
+
+  // Exit Game back to Hub (Admin Only)
+  const handleExitToHub = async () => {
+    setActiveGame('hub');
+    setIsRunning(false);
+    await broadcast({ activeGame: 'hub', isRunning: false });
+  };
+
+  // Reroll Challenge (Admin Only)
+  const handleReroll = async () => {
+    if (activeGame === 'impromptu') {
+      const p = IMPROMPTU_TOPICS[Math.floor(Math.random() * IMPROMPTU_TOPICS.length)];
+      setCurrentPrompt(p);
+      broadcast({ prompt: p });
+    } else if (activeGame === 'hottake') {
+      const p = HOT_TAKES[Math.floor(Math.random() * HOT_TAKES.length)];
+      setCurrentPrompt(p);
+      broadcast({ prompt: p });
+    } else if (activeGame === 'pitch') {
+      const prod = PITCH_PRODUCTS[Math.floor(Math.random() * PITCH_PRODUCTS.length)];
+      setCurrentProduct(prod);
+      broadcast({ product: prod });
+    } else if (activeGame === 'emotion') {
+      const p = EMOTION_SCENARIOS[Math.floor(Math.random() * EMOTION_SCENARIOS.length)];
+      setCurrentPrompt(p);
+      broadcast({ prompt: p });
+    } else if (activeGame === 'bomb') {
+      const b = WORD_BOMB_CHALLENGES[Math.floor(Math.random() * WORD_BOMB_CHALLENGES.length)];
+      setCurrentBomb(b);
+      setBombExploded(false);
+      broadcast({ bomb: b, bombExploded: false });
+    } else if (activeGame === 'debate') {
+      const deb = DEBATE_CHALLENGES[Math.floor(Math.random() * DEBATE_CHALLENGES.length)];
+      setCurrentDebate(deb);
+      setDebateTurn('A');
+      broadcast({ debate: deb, debateTurn: 'A' });
     }
   };
 
-  // Rollers
-  const rollImpromptuTopic = () => {
-    setCurrentPrompt(IMPROMPTU_TOPICS[Math.floor(Math.random() * IMPROMPTU_TOPICS.length)]);
-  };
-
-  const rollHotTake = () => {
-    setCurrentPrompt(HOT_TAKES[Math.floor(Math.random() * HOT_TAKES.length)]);
-  };
-
-  const rollPitchProduct = () => {
-    setCurrentProduct(PITCH_PRODUCTS[Math.floor(Math.random() * PITCH_PRODUCTS.length)]);
-  };
-
-  const rollEmotionScenario = () => {
-    setCurrentPrompt(EMOTION_SCENARIOS[Math.floor(Math.random() * EMOTION_SCENARIOS.length)]);
-  };
-
-  const rollWordBomb = () => {
-    setBombExploded(false);
-    setCurrentBomb(WORD_BOMB_CHALLENGES[Math.floor(Math.random() * WORD_BOMB_CHALLENGES.length)]);
-  };
-
-  const rollDebate = () => {
-    setDebateTurn('A');
-    setCurrentDebate(DEBATE_CHALLENGES[Math.floor(Math.random() * DEBATE_CHALLENGES.length)]);
-  };
-
-  // Random Speaker Spinner
+  // Spin Speaker (Admin Only)
   const spinRandomSpeaker = (target: 'A' | 'B' = 'A') => {
     if (members.length === 0) return;
     setIsSpinningSpeaker(true);
@@ -340,11 +440,12 @@ export default function GamesPage() {
         clearInterval(interval);
         setIsSpinningSpeaker(false);
         confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
+        if (target === 'A') broadcast({ selectedSpeaker: randomMember });
+        else broadcast({ selectedSpeakerB: randomMember });
       }
     }, 100);
   };
 
-  // Spin Both Speakers for Debate
   const spinDebateSpeakers = () => {
     if (members.length < 2) return;
     setIsSpinningSpeaker(true);
@@ -361,36 +462,47 @@ export default function GamesPage() {
         clearInterval(interval);
         setIsSpinningSpeaker(false);
         confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+        broadcast({ selectedSpeaker: members[idxA], selectedSpeakerB: members[idxB] });
       }
     }, 100);
   };
 
-  // Timer Controls
-  const toggleTimer = () => {
+  // Timer Controls (Admin Only)
+  const toggleTimer = async () => {
     if (timeLeft === 0) {
       resetTimer();
       setIsRunning(true);
+      await broadcast({ isRunning: true, timeLeft: duration, isFinished: false });
     } else {
-      setIsRunning(!isRunning);
+      const nextRunning = !isRunning;
+      setIsRunning(nextRunning);
+      await broadcast({ isRunning: nextRunning, timeLeft });
     }
   };
 
-  const resetTimer = () => {
+  const resetTimer = async () => {
     setIsRunning(false);
     setIsFinished(false);
     setBombExploded(false);
     setDebateTurn('A');
     setTimeLeft(duration);
+    await broadcast({
+      isRunning: false,
+      isFinished: false,
+      bombExploded: false,
+      debateTurn: 'A',
+      timeLeft: duration,
+    });
   };
 
-  // Trigger Word Bomb explosion
-  const handleTriggerBomb = () => {
+  const handleTriggerBomb = async () => {
     setIsRunning(false);
     setBombExploded(true);
     playBeep(200, 'sawtooth', 0.5);
+    await broadcast({ isRunning: false, bombExploded: true });
   };
 
-  // Points Awarding
+  // Award Points (Admin Only)
   const handleAwardPoints = async (member: Member | null, amount: number, label: string) => {
     if (!member) {
       alert('Please select a speaker first!');
@@ -422,43 +534,187 @@ export default function GamesPage() {
     }
   };
 
-  // Timer Progress Calculation
-  const progressPercent = duration > 0 ? ((duration - timeLeft) / duration) * 100 : 0;
-  const isUrgent = timeLeft <= 10 && timeLeft > 0;
+  // Member Actions: Cast Vote & Send Reaction
+  const handleCastVote = async (choice: 'A' | 'B') => {
+    if (!currentMemberId) return;
+    setMyVote(choice);
+    try {
+      await castGameVote(currentMemberId, choice);
+      confetti({ particleCount: 30, spread: 50 });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
-  // Emotion Switch Phase Index (0 to 3)
-  const currentEmotionPhase = Math.min(3, Math.max(0, Math.floor((40 - timeLeft) / 10)));
+  const handleSendReaction = async (reaction: string) => {
+    try {
+      await sendGameReaction(reaction);
+      confetti({ particleCount: 25, spread: 45, origin: { y: 0.8 } });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Tally Member Votes
+  const votes = liveState?.votes || {};
+  const totalVotes = Object.keys(votes).length;
+  const countA = Object.values(votes).filter((v) => v === 'A').length;
+  const countB = Object.values(votes).filter((v) => v === 'B').length;
+  const percentA = totalVotes > 0 ? Math.round((countA / totalVotes) * 100) : 50;
+  const percentB = totalVotes > 0 ? Math.round((countB / totalVotes) * 100) : 50;
+
+  // Active game display info
+  const effectiveGame = isAdmin ? activeGame : (liveState?.activeGame || 'hub');
+  const effectiveSpeaker = isAdmin ? selectedSpeaker : (liveState?.selectedSpeaker || null);
+  const effectiveSpeakerB = isAdmin ? selectedSpeakerB : (liveState?.selectedSpeakerB || null);
+  const effectivePrompt = isAdmin ? currentPrompt : (liveState?.prompt || '');
+  const effectiveProduct = isAdmin ? currentProduct : (liveState?.product || null);
+  const effectiveBomb = isAdmin ? currentBomb : (liveState?.bomb || null);
+  const effectiveDebate = isAdmin ? currentDebate : (liveState?.debate || null);
+  const effectiveTimeLeft = isAdmin ? timeLeft : (liveState?.timeLeft ?? 60);
+  const effectiveDuration = isAdmin ? duration : (liveState?.duration ?? 60);
+  const effectiveIsRunning = isAdmin ? isRunning : (liveState?.isRunning ?? false);
+  const effectiveIsFinished = isAdmin ? isFinished : (liveState?.isFinished ?? false);
+  const effectiveBombExploded = isAdmin ? bombExploded : (liveState?.bombExploded ?? false);
+  const effectiveDebateTurn = isAdmin ? debateTurn : (liveState?.debateTurn ?? 'A');
+
+  const progressPercent = effectiveDuration > 0 ? ((effectiveDuration - effectiveTimeLeft) / effectiveDuration) * 100 : 0;
+  const isUrgent = effectiveTimeLeft <= 10 && effectiveTimeLeft > 0;
+  const currentEmotionPhase = Math.min(3, Math.max(0, Math.floor((40 - effectiveTimeLeft) / 10)));
   const currentEmotion = EMOTION_STEPS[currentEmotionPhase];
 
+  const gameTitles: Record<GameMode, { title: string; icon: any; color: string }> = {
+    hub: { title: "Game Arena", icon: Gamepad2, color: "text-yellow-400" },
+    impromptu: { title: "Impromptu 60s Speech", icon: Timer, color: "text-yellow-400" },
+    hottake: { title: "Hot Take Roulette", icon: Flame, color: "text-amber-400" },
+    pitch: { title: "Pitch in 30", icon: Lightbulb, color: "text-indigo-400" },
+    emotion: { title: "Emotion Switch", icon: Drama, color: "text-purple-400" },
+    bomb: { title: "Word Bomb Challenge", icon: Bomb, color: "text-rose-400" },
+    debate: { title: "Debate Blitz (1 vs 1)", icon: Swords, color: "text-emerald-400" },
+  };
+
+  const activeMeta = gameTitles[effectiveGame];
+  const GameIcon = activeMeta.icon;
+
   // ==========================================
-  // VIEW: GAME SELECTION HUB (6 GAMES)
+  // VIEW 1: MEMBER LOBBY (When no game is active)
   // ==========================================
-  if (activeGame === 'hub') {
+  if (!isAdmin && effectiveGame === 'hub') {
     return (
-      <div className="space-y-6 pb-8">
-        {/* Top Header */}
+      <div className="space-y-5 pb-8">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition-colors"
-            >
+            <Link href="/" className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
               <h1 className="text-xl font-bold text-white flex items-center gap-2">
                 <Gamepad2 className="w-5 h-5 text-yellow-400" />
-                <span>Presentations Game Center</span>
+                <span>Presentations Arena</span>
               </h1>
-              <p className="text-xs text-slate-400">6 interactive presentation challenges & speech battles</p>
+              <p className="text-xs text-slate-400">Audience & Voting Center</p>
             </div>
           </div>
-          <span className="px-2.5 py-1 bg-yellow-400/20 text-yellow-400 border border-yellow-400/40 rounded-full text-[10px] font-black uppercase tracking-wider">
-            6 GAMES LIVE
+          <span className="px-2.5 py-1 bg-yellow-400/20 text-yellow-400 border border-yellow-400/40 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+            <Eye className="w-3.5 h-3.5" />
+            <span>Spectator</span>
           </span>
         </div>
 
-        {/* Hero Card */}
+        {/* Waiting Card */}
+        <div className="p-8 bg-gradient-to-br from-yellow-500/15 via-amber-600/10 to-slate-900 border-2 border-yellow-400/40 rounded-3xl text-center space-y-4 shadow-xl">
+          <div className="w-14 h-14 rounded-2xl bg-yellow-400/20 border border-yellow-400/40 flex items-center justify-center text-yellow-400 mx-auto animate-pulse">
+            <Radio className="w-7 h-7" />
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-base font-black text-white">Live Session Lobby</h2>
+            <p className="text-xs text-slate-300 max-w-xs mx-auto leading-relaxed">
+              Waiting for Coordinator Hazem to launch a live presentation game... Keep this screen open!
+            </p>
+          </div>
+          <p className="text-[10px] text-yellow-300/80 font-mono">
+            When a game starts, your screen will automatically tune in to watch, vote, and react live!
+          </p>
+        </div>
+
+        {/* Preview of the 6 Games */}
+        <div className="space-y-2">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+            Games Played in Sessions (6 Challenges)
+          </h3>
+          <div className="grid grid-cols-2 gap-2 text-left">
+            <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-2xl space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-yellow-400">
+                <Timer className="w-3.5 h-3.5" />
+                <span>Impromptu (60s)</span>
+              </div>
+              <p className="text-[10px] text-slate-400">Random speech topic with zero preparation.</p>
+            </div>
+            <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-2xl space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                <Flame className="w-3.5 h-3.5" />
+                <span>Hot Take (45s)</span>
+              </div>
+              <p className="text-[10px] text-slate-400">Defend an unpopular stance with passion.</p>
+            </div>
+            <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-2xl space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-400">
+                <Lightbulb className="w-3.5 h-3.5" />
+                <span>Pitch in 30 (30s)</span>
+              </div>
+              <p className="text-[10px] text-slate-400">Pitch a bizarre invention like a billion-dollar startup.</p>
+            </div>
+            <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-2xl space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-purple-400">
+                <Drama className="w-3.5 h-3.5" />
+                <span>Emotion Switch</span>
+              </div>
+              <p className="text-[10px] text-slate-400">Vocal tone shifts every 10 seconds.</p>
+            </div>
+            <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-2xl space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                <Bomb className="w-3.5 h-3.5" />
+                <span>Word Bomb (45s)</span>
+              </div>
+              <p className="text-[10px] text-slate-400">Speech with 3 forbidden trap words.</p>
+            </div>
+            <div className="p-3 bg-slate-800/50 border border-slate-700/60 rounded-2xl space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                <Swords className="w-3.5 h-3.5" />
+                <span>Debate Blitz (1v1)</span>
+              </div>
+              <p className="text-[10px] text-slate-400">Two speakers duel; audience votes winner!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VIEW 2: COORDINATOR GAME SELECTION HUB
+  // ==========================================
+  if (isAdmin && activeGame === 'hub') {
+    return (
+      <div className="space-y-6 pb-8">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white">
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                <Gamepad2 className="w-5 h-5 text-yellow-400" />
+                <span>Coordinator Game Control</span>
+              </h1>
+              <p className="text-xs text-slate-400">Launch challenges & broadcast live to all members</p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-yellow-400 text-slate-950 rounded-full text-[10px] font-black uppercase tracking-wider">
+            HOST
+          </span>
+        </div>
+
         <div className="p-5 bg-gradient-to-br from-yellow-500/20 via-amber-600/10 to-slate-900 border-2 border-yellow-400/50 rounded-3xl space-y-2 shadow-xl">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-yellow-400 text-slate-950 rounded-2xl shadow-md">
@@ -466,17 +722,16 @@ export default function GamesPage() {
             </div>
             <div>
               <h2 className="text-base font-black text-white">Stage Presence Arcade</h2>
-              <p className="text-xs text-yellow-300/80">Warm-ups, Vocal Variety & Competitive Battles</p>
+              <p className="text-xs text-yellow-300/80">Launch Any of the 6 Challenges</p>
             </div>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed pt-1">
-            Pick a challenge below, spin random participants, start the countdown, and award real-time bonus points!
+            Selecting a game immediately broadcasts to every member device in the room! Members tune in as audience spectators and vote in real-time.
           </p>
         </div>
 
         {/* 6 Game Cards Grid */}
         <div className="grid grid-cols-1 gap-3">
-          {/* Game 1: Impromptu Timer */}
           <div
             onClick={() => handleLaunchGame('impromptu')}
             className="p-4 bg-slate-800/60 hover:bg-slate-800 border-2 border-slate-700/80 hover:border-yellow-400/80 rounded-3xl transition-all cursor-pointer group shadow-lg flex items-center justify-between gap-4"
@@ -487,22 +742,15 @@ export default function GamesPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-white group-hover:text-yellow-400 transition-colors truncate">
-                    Impromptu Timer
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-yellow-400/20 text-yellow-400 font-mono">
-                    60s
-                  </span>
+                  <h3 className="font-bold text-sm text-white group-hover:text-yellow-400 transition-colors truncate">Impromptu Timer</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-yellow-400/20 text-yellow-400 font-mono">60s</span>
                 </div>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
-                  Random speech topic. Speaker has 60 seconds to speak fluently and persuasively.
-                </p>
+                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">Random topic. Speaker talks fluently for 60 seconds.</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-yellow-400 transition-colors flex-shrink-0" />
           </div>
 
-          {/* Game 2: Hot Take Roulette */}
           <div
             onClick={() => handleLaunchGame('hottake')}
             className="p-4 bg-slate-800/60 hover:bg-slate-800 border-2 border-slate-700/80 hover:border-amber-400/80 rounded-3xl transition-all cursor-pointer group shadow-lg flex items-center justify-between gap-4"
@@ -513,22 +761,15 @@ export default function GamesPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-white group-hover:text-amber-400 transition-colors truncate">
-                    Hot Take Roulette
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-400/20 text-amber-400 font-mono">
-                    45s
-                  </span>
+                  <h3 className="font-bold text-sm text-white group-hover:text-amber-400 transition-colors truncate">Hot Take Roulette</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-400/20 text-amber-400 font-mono">45s</span>
                 </div>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
-                  Spin an unpopular or controversial stance. Defend it with maximum conviction for 45 seconds!
-                </p>
+                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">Defend a controversial stance with conviction for 45s.</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors flex-shrink-0" />
           </div>
 
-          {/* Game 3: Pitch in 30 */}
           <div
             onClick={() => handleLaunchGame('pitch')}
             className="p-4 bg-slate-800/60 hover:bg-slate-800 border-2 border-slate-700/80 hover:border-indigo-400/80 rounded-3xl transition-all cursor-pointer group shadow-lg flex items-center justify-between gap-4"
@@ -539,22 +780,15 @@ export default function GamesPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-white group-hover:text-indigo-400 transition-colors truncate">
-                    Pitch in 30
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-400/20 text-indigo-400 font-mono">
-                    30s
-                  </span>
+                  <h3 className="font-bold text-sm text-white group-hover:text-indigo-400 transition-colors truncate">Pitch in 30</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-400/20 text-indigo-400 font-mono">30s</span>
                 </div>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
-                  A bizarre product is revealed. Pitch it as a \$10B startup breakthrough in 30 seconds!
-                </p>
+                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">Pitch a wild product as a billion-dollar startup in 30s.</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-indigo-400 transition-colors flex-shrink-0" />
           </div>
 
-          {/* Game 4: Emotion Switch */}
           <div
             onClick={() => handleLaunchGame('emotion')}
             className="p-4 bg-slate-800/60 hover:bg-slate-800 border-2 border-slate-700/80 hover:border-purple-400/80 rounded-3xl transition-all cursor-pointer group shadow-lg flex items-center justify-between gap-4"
@@ -565,22 +799,15 @@ export default function GamesPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-white group-hover:text-purple-400 transition-colors truncate">
-                    Emotion Switch
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-400/20 text-purple-400 font-mono">
-                    40s
-                  </span>
+                  <h3 className="font-bold text-sm text-white group-hover:text-purple-400 transition-colors truncate">Emotion Switch</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-purple-400/20 text-purple-400 font-mono">40s</span>
                 </div>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
-                  The speaker delivers a speech while emotions shift every 10s (Angry ➔ Excited ➔ Whisper ➔ Soap Opera)!
-                </p>
+                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">Vocal variety challenge shifting emotions every 10s.</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-purple-400 transition-colors flex-shrink-0" />
           </div>
 
-          {/* Game 5: Word Bomb */}
           <div
             onClick={() => handleLaunchGame('bomb')}
             className="p-4 bg-slate-800/60 hover:bg-slate-800 border-2 border-slate-700/80 hover:border-rose-400/80 rounded-3xl transition-all cursor-pointer group shadow-lg flex items-center justify-between gap-4"
@@ -591,22 +818,15 @@ export default function GamesPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-white group-hover:text-rose-400 transition-colors truncate">
-                    Word Bomb
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-400/20 text-rose-400 font-mono">
-                    45s
-                  </span>
+                  <h3 className="font-bold text-sm text-white group-hover:text-rose-400 transition-colors truncate">Word Bomb</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-400/20 text-rose-400 font-mono">45s</span>
                 </div>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
-                  Speak on a topic without uttering 3 forbidden trap words! If you slip, the bomb explodes!
-                </p>
+                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">Speak without saying 3 banned words. If you slip: BOOM!</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-rose-400 transition-colors flex-shrink-0" />
           </div>
 
-          {/* Game 6: Debate Blitz */}
           <div
             onClick={() => handleLaunchGame('debate')}
             className="p-4 bg-slate-800/60 hover:bg-slate-800 border-2 border-slate-700/80 hover:border-emerald-400/80 rounded-3xl transition-all cursor-pointer group shadow-lg flex items-center justify-between gap-4"
@@ -617,16 +837,10 @@ export default function GamesPage() {
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition-colors truncate">
-                    Debate Blitz (1 vs 1)
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-400/20 text-emerald-400 font-mono">
-                    60s
-                  </span>
+                  <h3 className="font-bold text-sm text-white group-hover:text-emerald-400 transition-colors truncate">Debate Blitz (1v1)</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-400/20 text-emerald-400 font-mono">60s</span>
                 </div>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">
-                  Two speakers go head-to-head on opposite sides of a debate! 30 seconds each, audience votes winner.
-                </p>
+                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">Two speakers duel; audience votes on who won!</p>
               </div>
             </div>
             <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-emerald-400 transition-colors flex-shrink-0" />
@@ -637,43 +851,43 @@ export default function GamesPage() {
   }
 
   // ==========================================
-  // VIEW: ACTIVE GAME ARENA
+  // VIEW 3: ACTIVE GAME (Admin Host OR Member Spectator)
   // ==========================================
-  const gameTitles: Record<GameMode, { title: string; icon: any; color: string; border: string }> = {
-    hub: { title: "Hub", icon: Gamepad2, color: "text-yellow-400", border: "border-yellow-400" },
-    impromptu: { title: "Impromptu 60s Speech", icon: Timer, color: "text-yellow-400", border: "border-yellow-400/60" },
-    hottake: { title: "Hot Take Roulette", icon: Flame, color: "text-amber-400", border: "border-amber-400/60" },
-    pitch: { title: "Pitch in 30", icon: Lightbulb, color: "text-indigo-400", border: "border-indigo-400/60" },
-    emotion: { title: "Emotion Switch", icon: Drama, color: "text-purple-400", border: "border-purple-400/60" },
-    bomb: { title: "Word Bomb Challenge", icon: Bomb, color: "text-rose-400", border: "border-rose-400/60" },
-    debate: { title: "Debate Blitz (1 vs 1)", icon: Swords, color: "text-emerald-400", border: "border-emerald-400/60" },
-  };
-
-  const activeMeta = gameTitles[activeGame];
-  const GameIcon = activeMeta.icon;
-
   return (
     <div className="space-y-4 pb-8">
-      {/* Game Header */}
+      {/* Top Bar */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <button
-          onClick={() => setActiveGame('hub')}
-          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Game Hub</span>
-        </button>
+        {isAdmin ? (
+          <button
+            onClick={handleExitToHub}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>End Game & Return to Hub</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-1.5 text-xs text-yellow-400 font-bold">
+            <Radio className="w-4 h-4 animate-pulse text-rose-500" />
+            <span>Live Session Arena</span>
+          </div>
+        )}
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setSoundEnabled(!soundEnabled)}
-            className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            title={soundEnabled ? 'Mute Sounds' : 'Enable Sounds'}
-          >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-yellow-400" /> : <VolumeX className="w-4 h-4" />}
-          </button>
+          {isAdmin ? (
+            <button
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              {soundEnabled ? <Volume2 className="w-4 h-4 text-yellow-400" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+          ) : (
+            <span className="px-2.5 py-1 bg-yellow-400/20 text-yellow-400 border border-yellow-400/40 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+              <Eye className="w-3 h-3" />
+              <span>Audience</span>
+            </span>
+          )}
           <span className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-xl text-xs font-bold font-mono">
-            {duration}s Round
+            {effectiveDuration}s
           </span>
         </div>
       </div>
@@ -685,10 +899,8 @@ export default function GamesPage() {
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* SPEAKER SECTION: 1v1 for Debate, Single for other games */}
-      {/* ======================================================== */}
-      {activeGame === 'debate' ? (
+      {/* SPEAKER SECTION */}
+      {effectiveGame === 'debate' ? (
         <div className="p-3.5 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -696,43 +908,43 @@ export default function GamesPage() {
               <span>1 vs 1 Debaters</span>
             </span>
 
-            <button
-              onClick={spinDebateSpeakers}
-              disabled={isSpinningSpeaker || members.length < 2}
-              className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all shadow-sm cursor-pointer"
-            >
-              <Shuffle className={`w-3.5 h-3.5 ${isSpinningSpeaker ? 'animate-spin' : ''}`} />
-              <span>{isSpinningSpeaker ? 'Spinning...' : 'Spin Pair'}</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={spinDebateSpeakers}
+                disabled={isSpinningSpeaker || members.length < 2}
+                className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all shadow-sm cursor-pointer"
+              >
+                <Shuffle className={`w-3.5 h-3.5 ${isSpinningSpeaker ? 'animate-spin' : ''}`} />
+                <span>{isSpinningSpeaker ? 'Spinning...' : 'Spin Pair'}</span>
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            {/* Speaker A */}
             <div className={`p-2.5 rounded-xl border transition-all ${
-              debateTurn === 'A' && isRunning
+              effectiveDebateTurn === 'A' && effectiveIsRunning
                 ? 'bg-emerald-500/15 border-emerald-400 shadow-md ring-2 ring-emerald-400/40'
                 : 'bg-slate-900/80 border-slate-700/80'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <BotAvatar config={selectedSpeaker?.avatar} size="sm" />
+                <BotAvatar config={effectiveSpeaker?.avatar} size="sm" />
                 <div className="min-w-0">
                   <span className="text-[10px] text-emerald-400 font-black block">SIDE A (PRO)</span>
-                  <span className="text-xs font-bold text-white truncate block">{selectedSpeaker?.name || 'Speaker A'}</span>
+                  <span className="text-xs font-bold text-white truncate block">{effectiveSpeaker?.name || 'Speaker A'}</span>
                 </div>
               </div>
             </div>
 
-            {/* Speaker B */}
             <div className={`p-2.5 rounded-xl border transition-all ${
-              debateTurn === 'B' && isRunning
+              effectiveDebateTurn === 'B' && effectiveIsRunning
                 ? 'bg-sky-500/15 border-sky-400 shadow-md ring-2 ring-sky-400/40'
                 : 'bg-slate-900/80 border-slate-700/80'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <BotAvatar config={selectedSpeakerB?.avatar} size="sm" />
+                <BotAvatar config={effectiveSpeakerB?.avatar} size="sm" />
                 <div className="min-w-0">
                   <span className="text-[10px] text-sky-400 font-black block">SIDE B (CON)</span>
-                  <span className="text-xs font-bold text-white truncate block">{selectedSpeakerB?.name || 'Speaker B'}</span>
+                  <span className="text-xs font-bold text-white truncate block">{effectiveSpeakerB?.name || 'Speaker B'}</span>
                 </div>
               </div>
             </div>
@@ -746,60 +958,62 @@ export default function GamesPage() {
               <span>Active Speaker</span>
             </span>
 
-            <button
-              onClick={() => spinRandomSpeaker('A')}
-              disabled={isSpinningSpeaker || members.length === 0}
-              className="px-2.5 py-1 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all shadow-sm cursor-pointer"
-            >
-              <Shuffle className={`w-3.5 h-3.5 ${isSpinningSpeaker ? 'animate-spin' : ''}`} />
-              <span>{isSpinningSpeaker ? 'Spinning...' : 'Random Speaker'}</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => spinRandomSpeaker('A')}
+                disabled={isSpinningSpeaker || members.length === 0}
+                className="px-2.5 py-1 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-slate-950 font-bold text-[11px] rounded-lg flex items-center gap-1 transition-all shadow-sm cursor-pointer"
+              >
+                <Shuffle className={`w-3.5 h-3.5 ${isSpinningSpeaker ? 'animate-spin' : ''}`} />
+                <span>{isSpinningSpeaker ? 'Spinning...' : 'Random Speaker'}</span>
+              </button>
+            )}
           </div>
 
-          {selectedSpeaker ? (
+          {effectiveSpeaker ? (
             <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-700/80">
               <div className="flex items-center gap-3 min-w-0">
-                <BotAvatar config={selectedSpeaker.avatar} size="sm" />
+                <BotAvatar config={effectiveSpeaker.avatar} size="sm" />
                 <div className="min-w-0">
                   <h4 className="font-bold text-xs text-white truncate flex items-center gap-1.5">
-                    <span>{selectedSpeaker.name}</span>
-                    {selectedSpeaker.titleBadge && (
+                    <span>{effectiveSpeaker.name}</span>
+                    {effectiveSpeaker.titleBadge && (
                       <span className="px-1.5 py-0.2 text-[8px] bg-amber-400/20 text-amber-300 rounded-full">
-                        {selectedSpeaker.titleBadge}
+                        {effectiveSpeaker.titleBadge}
                       </span>
                     )}
                   </h4>
                   <p className="text-[10px] text-slate-400 font-mono">
-                    {selectedSpeaker.id} • {selectedSpeaker.totalPoints || 0} pts
+                    {effectiveSpeaker.id} • {effectiveSpeaker.totalPoints || 0} pts
                   </p>
                 </div>
               </div>
 
-              {/* Quick Switch Dropdown */}
-              <select
-                value={selectedSpeaker.id}
-                onChange={(e) => {
-                  const found = members.find((m) => m.id === e.target.value);
-                  if (found) setSelectedSpeaker(found);
-                }}
-                className="text-[10px] bg-slate-800 border border-slate-700 rounded-lg text-slate-300 px-2 py-1 max-w-[110px] truncate"
-              >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
+              {isAdmin && (
+                <select
+                  value={effectiveSpeaker.id}
+                  onChange={(e) => {
+                    const found = members.find((m) => m.id === e.target.value);
+                    if (found) {
+                      setSelectedSpeaker(found);
+                      broadcast({ selectedSpeaker: found });
+                    }
+                  }}
+                  className="text-[10px] bg-slate-800 border border-slate-700 rounded-lg text-slate-300 px-2 py-1 max-w-[110px] truncate"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           ) : (
-            <p className="text-xs text-slate-400 text-center py-2">No members available</p>
+            <p className="text-xs text-slate-400 text-center py-2">No active speaker assigned yet</p>
           )}
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* GAME SPECIFIC CHALLENGE PROMPT CARD */}
-      {/* ======================================================== */}
+      {/* CHALLENGE PROMPT CARD */}
       <div className="p-4 bg-slate-800/80 border-2 border-slate-700/80 rounded-3xl space-y-3 shadow-lg relative overflow-hidden">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -807,60 +1021,39 @@ export default function GamesPage() {
             <span className="text-xs font-black text-white">{activeMeta.title}</span>
           </div>
 
-          <button
-            onClick={() => {
-              if (activeGame === 'impromptu') rollImpromptuTopic();
-              else if (activeGame === 'hottake') rollHotTake();
-              else if (activeGame === 'pitch') rollPitchProduct();
-              else if (activeGame === 'emotion') rollEmotionScenario();
-              else if (activeGame === 'bomb') rollWordBomb();
-              else if (activeGame === 'debate') rollDebate();
-            }}
-            className="text-[11px] text-yellow-400 hover:text-yellow-300 font-bold flex items-center gap-1 cursor-pointer"
-          >
-            <RefreshCw className="w-3 h-3" />
-            <span>Reroll</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleReroll}
+              className="text-[11px] text-yellow-400 hover:text-yellow-300 font-bold flex items-center gap-1 cursor-pointer"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Reroll</span>
+            </button>
+          )}
         </div>
 
-        {/* 1. Pitch in 30 prompt */}
-        {activeGame === 'pitch' && currentProduct && (
+        {effectiveGame === 'pitch' && effectiveProduct && (
           <div className="space-y-1 bg-slate-900/90 p-3.5 rounded-2xl border border-indigo-500/30">
-            <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">
-              Product to Pitch in 30s:
-            </span>
-            <h3 className="text-base font-black text-white">
-              ✨ {currentProduct.name}
-            </h3>
-            <p className="text-xs text-slate-300 leading-relaxed italic">
-              &quot;{currentProduct.pitch}&quot;
-            </p>
+            <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider block">Product to Pitch in 30s:</span>
+            <h3 className="text-base font-black text-white">✨ {effectiveProduct.name}</h3>
+            <p className="text-xs text-slate-300 leading-relaxed italic">&quot;{effectiveProduct.pitch}&quot;</p>
           </div>
         )}
 
-        {/* 2. Word Bomb prompt with banned words */}
-        {activeGame === 'bomb' && currentBomb && (
+        {effectiveGame === 'bomb' && effectiveBomb && (
           <div className="space-y-2.5 bg-slate-900/90 p-3.5 rounded-2xl border border-rose-500/40">
             <div>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                Speech Topic (45s):
-              </span>
-              <h3 className="text-sm font-black text-white">
-                &quot;{currentBomb.topic}&quot;
-              </h3>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Speech Topic (45s):</span>
+              <h3 className="text-sm font-black text-white">&quot;{effectiveBomb.topic}&quot;</h3>
             </div>
-
             <div className="pt-1 border-t border-slate-800">
               <span className="text-[10px] text-rose-400 font-black uppercase tracking-wider flex items-center gap-1 mb-1.5">
                 <Bomb className="w-3.5 h-3.5" />
-                <span>FORBIDDEN TRAP WORDS (DO NOT SAY):</span>
+                <span>FORBIDDEN TRAP WORDS:</span>
               </span>
               <div className="flex flex-wrap gap-1.5">
-                {currentBomb.banned.map((word, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2.5 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-black tracking-wider uppercase"
-                  >
+                {effectiveBomb.banned.map((word, idx) => (
+                  <span key={idx} className="px-2.5 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-black uppercase">
                     🚫 {word}
                   </span>
                 ))}
@@ -869,284 +1062,348 @@ export default function GamesPage() {
           </div>
         )}
 
-        {/* 3. Debate Blitz prompt with 2 sides */}
-        {activeGame === 'debate' && currentDebate && (
+        {effectiveGame === 'debate' && effectiveDebate && (
           <div className="space-y-2.5 bg-slate-900/90 p-3.5 rounded-2xl border border-emerald-500/40">
             <div>
-              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
-                Debate Topic:
-              </span>
-              <h3 className="text-sm font-black text-white">
-                &quot;{currentDebate.topic}&quot;
-              </h3>
+              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">Debate Topic:</span>
+              <h3 className="text-sm font-black text-white">&quot;{effectiveDebate.topic}&quot;</h3>
             </div>
-
             <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
               <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200">
-                <strong className="block text-emerald-400 text-[10px]">SIDE A ARGUMENT:</strong>
-                {currentDebate.sideA}
+                <strong className="block text-emerald-400 text-[10px]">SIDE A:</strong>
+                {effectiveDebate.sideA}
               </div>
               <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-200">
-                <strong className="block text-sky-400 text-[10px]">SIDE B ARGUMENT:</strong>
-                {currentDebate.sideB}
+                <strong className="block text-sky-400 text-[10px]">SIDE B:</strong>
+                {effectiveDebate.sideB}
               </div>
             </div>
           </div>
         )}
 
-        {/* 4. Emotion Switch scenario prompt */}
-        {activeGame === 'emotion' && (
+        {effectiveGame === 'emotion' && (
           <div className="space-y-1 bg-slate-900/90 p-3.5 rounded-2xl border border-purple-500/40">
-            <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">
-              Session Scenario (Shifts Every 10s):
-            </span>
-            <p className="text-sm font-extrabold text-white leading-relaxed">
-              &quot;{currentPrompt}&quot;
-            </p>
+            <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider block">Scenario:</span>
+            <p className="text-sm font-extrabold text-white leading-relaxed">&quot;{effectivePrompt}&quot;</p>
           </div>
         )}
 
-        {/* 5. Standard Prompts for Impromptu / HotTake */}
-        {(activeGame === 'impromptu' || activeGame === 'hottake') && (
+        {(effectiveGame === 'impromptu' || effectiveGame === 'hottake') && (
           <div className="bg-slate-900/90 p-3.5 rounded-2xl border border-slate-700/80 space-y-1">
             <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
-              {activeGame === 'hottake' ? 'Defend This Hot Take:' : 'Speaking Prompt:'}
+              {effectiveGame === 'hottake' ? 'Defend This Hot Take:' : 'Speaking Prompt:'}
             </span>
-            <p className="text-sm font-extrabold text-white leading-relaxed">
-              &quot;{currentPrompt}&quot;
-            </p>
+            <p className="text-sm font-extrabold text-white leading-relaxed">&quot;{effectivePrompt}&quot;</p>
           </div>
         )}
       </div>
 
-      {/* ======================================================== */}
-      {/* EMOTION SWITCH LIVE DISPLAY BANNER (Only in Emotion Mode) */}
-      {/* ======================================================== */}
-      {activeGame === 'emotion' && (
+      {/* EMOTION BANNER */}
+      {effectiveGame === 'emotion' && (
         <div className={`p-4 rounded-3xl border-2 bg-gradient-to-r ${currentEmotion.bg} ${currentEmotion.border} space-y-1 text-center shadow-lg animate-fadeIn`}>
           <span className="text-[10px] font-black uppercase tracking-wider text-white/80">
             PHASE {currentEmotionPhase + 1} OF 4 • CURRENT EMOTION:
           </span>
-          <h2 className="text-xl font-black text-white">
-            {currentEmotion.emotion}
-          </h2>
-          <p className="text-xs text-white/90 font-medium">
-            {currentEmotion.desc}
-          </p>
+          <h2 className="text-xl font-black text-white">{currentEmotion.emotion}</h2>
+          <p className="text-xs text-white/90 font-medium">{currentEmotion.desc}</p>
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* DEBATE TURN INDICATOR BANNER (Only in Debate Mode) */}
-      {/* ======================================================== */}
-      {activeGame === 'debate' && isRunning && (
-        <div className={`p-3 rounded-2xl text-center font-bold text-xs animate-pulse ${
-          debateTurn === 'A'
-            ? 'bg-emerald-500/20 border border-emerald-400 text-emerald-300'
-            : 'bg-sky-500/20 border border-sky-400 text-sky-300'
+      {/* WORD BOMB EXPLODED BANNER */}
+      {effectiveGame === 'bomb' && effectiveBombExploded && (
+        <div className="p-4 bg-rose-600/30 border-2 border-rose-500 rounded-3xl text-center space-y-1 animate-bounce">
+          <span className="text-2xl">💥 BOOM!</span>
+          <h3 className="text-base font-black text-white">Trap Word Uttered!</h3>
+          <p className="text-xs text-rose-200">The speaker stepped on a forbidden trap word!</p>
+        </div>
+      )}
+
+      {/* DEBATE TURN BANNER */}
+      {effectiveGame === 'debate' && effectiveIsRunning && (
+        <div className={`p-2.5 rounded-2xl text-center font-bold text-xs animate-pulse ${
+          effectiveDebateTurn === 'A' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-sky-500/20 text-sky-300'
         }`}>
-          {debateTurn === 'A' ? (
-            <span>🎤 SPEAKER A TURN: {selectedSpeaker?.name || 'Speaker A'} (0-30s)</span>
+          {effectiveDebateTurn === 'A' ? (
+            <span>🎤 SPEAKER A (0–30s): {effectiveSpeaker?.name || 'A'}</span>
           ) : (
-            <span>🎤 SPEAKER B TURN: {selectedSpeakerB?.name || 'Speaker B'} (30-60s)</span>
+            <span>🎤 SPEAKER B (30–60s): {effectiveSpeakerB?.name || 'B'}</span>
           )}
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* WORD BOMB EXPLODED BANNER (Only in Word Bomb Mode) */}
-      {/* ======================================================== */}
-      {activeGame === 'bomb' && bombExploded && (
-        <div className="p-4 bg-rose-600/30 border-2 border-rose-500 rounded-3xl text-center space-y-1 animate-bounce">
-          <span className="text-2xl">💥 BOOM!</span>
-          <h3 className="text-base font-black text-white">Trap Word Uttered!</h3>
-          <p className="text-xs text-rose-200">The speaker stepped on a forbidden word!</p>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* COUNTDOWN TIMER & CONTROLS */}
-      {/* ======================================================== */}
+      {/* COUNTDOWN TIMER */}
       <div className={`p-6 rounded-3xl border-2 transition-all text-center space-y-4 shadow-xl ${
-        bombExploded 
+        effectiveBombExploded 
           ? 'bg-rose-950/40 border-rose-600'
-          : isFinished 
+          : effectiveIsFinished 
           ? 'bg-rose-500/10 border-rose-500/60'
           : isUrgent 
           ? 'bg-amber-500/10 border-amber-500/60 animate-pulse'
           : 'bg-slate-800/60 border-slate-700/80'
       }`}>
-        {/* Large Time Display */}
         <div className="space-y-1">
           <span className={`text-5xl font-black font-mono tracking-tight ${
-            bombExploded
+            effectiveBombExploded
               ? 'text-rose-500'
-              : isFinished 
+              : effectiveIsFinished 
               ? 'text-rose-400' 
               : isUrgent 
               ? 'text-amber-400' 
               : 'text-white'
           }`}>
-            {timeLeft}s
+            {effectiveTimeLeft}s
           </span>
           <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
-            {bombExploded
+            {effectiveBombExploded
               ? "💥 Trap Word Triggered!"
-              : isFinished 
-              ? "⏰ Time's Up! Give Feedback & Award Points" 
-              : isRunning 
-              ? "Live in the spotlight! 🎤" 
-              : "Ready when you are!"}
+              : effectiveIsFinished 
+              ? "⏰ Round Finished!" 
+              : effectiveIsRunning 
+              ? "Speaker is Live! 🎤" 
+              : "Ready"}
           </p>
         </div>
 
-        {/* Progress Bar */}
         <div className="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-700/60">
           <div
             className={`h-full transition-all duration-300 ${
-              bombExploded
-                ? 'bg-rose-600'
-                : isFinished 
-                ? 'bg-rose-500' 
-                : isUrgent 
-                ? 'bg-amber-400' 
-                : 'bg-gradient-to-r from-yellow-400 to-amber-500'
+              effectiveBombExploded ? 'bg-rose-600' : effectiveIsFinished ? 'bg-rose-500' : isUrgent ? 'bg-amber-400' : 'bg-gradient-to-r from-yellow-400 to-amber-500'
             }`}
             style={{ width: `${progressPercent}%` }}
           />
         </div>
 
-        {/* Timer Controls */}
-        <div className="flex items-center justify-center gap-3 pt-1">
-          <button
-            onClick={toggleTimer}
-            disabled={bombExploded}
-            className={`px-6 py-2.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
-              isRunning
-                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                : 'bg-yellow-400 hover:bg-yellow-300 text-slate-950'
-            }`}
-          >
-            {isRunning ? (
-              <>
-                <Pause className="w-4 h-4 fill-slate-950" />
-                <span>Pause</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 fill-slate-950" />
-                <span>{timeLeft === 0 ? 'Restart Round' : 'Start Timer'}</span>
-              </>
-            )}
-          </button>
-
-          {/* Special Word Bomb Trigger Button */}
-          {activeGame === 'bomb' && isRunning && (
+        {/* TIMER CONTROLS: COORDINATOR ONLY */}
+        {isAdmin && (
+          <div className="flex items-center justify-center gap-3 pt-1">
             <button
-              onClick={handleTriggerBomb}
-              className="px-3.5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
-              title="Audience caught speaker saying a banned word!"
+              onClick={toggleTimer}
+              disabled={bombExploded}
+              className={`px-6 py-2.5 rounded-xl font-black text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
+                isRunning ? 'bg-amber-500 hover:bg-amber-400 text-slate-950' : 'bg-yellow-400 hover:bg-yellow-300 text-slate-950'
+              }`}
             >
-              <Bomb className="w-4 h-4" />
-              <span>BOOM! 💥</span>
+              {isRunning ? (
+                <>
+                  <Pause className="w-4 h-4 fill-slate-950" />
+                  <span>Pause</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 fill-slate-950" />
+                  <span>{timeLeft === 0 ? 'Restart' : 'Start Timer'}</span>
+                </>
+              )}
             </button>
-          )}
 
-          <button
-            onClick={resetTimer}
-            className="p-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-            title="Reset Timer"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-        </div>
+            {activeGame === 'bomb' && isRunning && (
+              <button
+                onClick={handleTriggerBomb}
+                className="px-3.5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
+              >
+                <Bomb className="w-4 h-4" />
+                <span>BOOM! 💥</span>
+              </button>
+            )}
+
+            <button
+              onClick={resetTimer}
+              className="p-2.5 rounded-xl bg-slate-700/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ======================================================== */}
-      {/* INSTANT POINTS PRESET AWARDS */}
+      {/* AUDIENCE VOTING & REACTION SECTION (FOR MEMBERS) */}
       {/* ======================================================== */}
-      {activeGame === 'debate' ? (
-        <div className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-2.5">
-          <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-            <Trophy className="w-4 h-4 text-yellow-400" />
-            <span>Award Debate Victor</span>
-          </h3>
-
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              disabled={awardingPoints || !selectedSpeaker}
-              onClick={() => handleAwardPoints(selectedSpeaker, 10, `Won Debate vs ${selectedSpeakerB?.name || 'opponent'}! 🏆`)}
-              className="p-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <span className="text-emerald-400 font-black text-xs block truncate">🏆 {selectedSpeaker?.name || 'A'}</span>
-              <span className="text-[9px] text-slate-400 block">+10 pts Winner</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={awardingPoints || !selectedSpeakerB}
-              onClick={() => handleAwardPoints(selectedSpeakerB, 10, `Won Debate vs ${selectedSpeaker?.name || 'opponent'}! 🏆`)}
-              className="p-2.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <span className="text-sky-400 font-black text-xs block truncate">🏆 {selectedSpeakerB?.name || 'B'}</span>
-              <span className="text-[9px] text-slate-400 block">+10 pts Winner</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={awardingPoints || !selectedSpeaker || !selectedSpeakerB}
-              onClick={async () => {
-                await handleAwardPoints(selectedSpeaker, 5, 'Debate Tie! 🤝');
-                await handleAwardPoints(selectedSpeakerB, 5, 'Debate Tie! 🤝');
-              }}
-              className="p-2.5 bg-slate-900 hover:bg-yellow-400/10 border border-slate-700 hover:border-yellow-400/40 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <span className="text-yellow-400 font-black text-xs block">🤝 Tie Battle</span>
-              <span className="text-[9px] text-slate-400 block">+5 pts Each</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-2.5">
+      {!isAdmin && (
+        <div className="p-4 bg-slate-800/80 border-2 border-yellow-400/50 rounded-3xl space-y-3.5 shadow-xl">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Award className="w-4 h-4 text-yellow-400" />
-              <span>Award Bonus Points to {selectedSpeaker?.name || 'Speaker'}</span>
+              <Vote className="w-4 h-4 text-yellow-400" />
+              <span>Audience Live Voting & Reactions</span>
             </h3>
-            <span className="text-[10px] text-slate-400 font-mono">1-Click</span>
+            <span className="text-[10px] text-yellow-400 font-mono font-bold">
+              {totalVotes} Votes Cast
+            </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              type="button"
-              disabled={awardingPoints || !selectedSpeaker}
-              onClick={() => handleAwardPoints(selectedSpeaker, 5, 'Great Effort & Energy! ⚡')}
-              className="p-2.5 bg-slate-900 hover:bg-yellow-400/10 border border-slate-700 hover:border-yellow-400/50 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <span className="text-yellow-400 font-black text-xs block">+5 pts</span>
-              <span className="text-[9px] text-slate-400 block truncate">Good Energy ⚡</span>
-            </button>
+          {/* If Debate Blitz: Vote for A or B */}
+          {effectiveGame === 'debate' ? (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-300">Who delivered the more persuasive argument?</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCastVote('A')}
+                  className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
+                    myVote === 'A'
+                      ? 'bg-emerald-500 text-slate-950 font-black border-emerald-400 shadow-md ring-2 ring-emerald-400/50'
+                      : 'bg-slate-900/90 text-white border-emerald-500/40 hover:bg-emerald-500/10'
+                  }`}
+                >
+                  <span className="text-[10px] block font-mono">SIDE A</span>
+                  <span className="text-xs font-bold block truncate">{effectiveSpeaker?.name || 'Speaker A'}</span>
+                  <span className="text-[10px] block mt-1 font-mono">{percentA}% ({countA})</span>
+                </button>
 
-            <button
-              type="button"
-              disabled={awardingPoints || !selectedSpeaker}
-              onClick={() => handleAwardPoints(selectedSpeaker, 10, 'Impressive Flow & Persuasion! ⭐')}
-              className="p-2.5 bg-slate-900 hover:bg-amber-400/10 border border-slate-700 hover:border-amber-400/50 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <span className="text-amber-400 font-black text-xs block">+10 pts</span>
-              <span className="text-[9px] text-slate-400 block truncate">Great Flow ⭐</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={() => handleCastVote('B')}
+                  className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
+                    myVote === 'B'
+                      ? 'bg-sky-500 text-slate-950 font-black border-sky-400 shadow-md ring-2 ring-sky-400/50'
+                      : 'bg-slate-900/90 text-white border-sky-500/40 hover:bg-sky-500/10'
+                  }`}
+                >
+                  <span className="text-[10px] block font-mono">SIDE B</span>
+                  <span className="text-xs font-bold block truncate">{effectiveSpeakerB?.name || 'Speaker B'}</span>
+                  <span className="text-[10px] block mt-1 font-mono">{percentB}% ({countB})</span>
+                </button>
+              </div>
 
-            <button
-              type="button"
-              disabled={awardingPoints || !selectedSpeaker}
-              onClick={() => handleAwardPoints(selectedSpeaker, 15, 'Masterclass Stage Delivery! 👑')}
-              className="p-2.5 bg-slate-900 hover:bg-emerald-400/10 border border-slate-700 hover:border-emerald-400/50 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <span className="text-emerald-400 font-black text-xs block">+15 pts</span>
-              <span className="text-[9px] text-slate-400 block truncate">Masterclass 👑</span>
-            </button>
+              {/* Live Vote Progress Bar */}
+              {totalVotes > 0 && (
+                <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden flex border border-slate-700/60">
+                  <div className="bg-emerald-400 h-full transition-all" style={{ width: `${percentA}%` }} />
+                  <div className="bg-sky-400 h-full transition-all" style={{ width: `${percentB}%` }} />
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Live Reactions for Other Games */
+            <div className="space-y-2">
+              <p className="text-[11px] text-slate-300">Tap to cheer and react to the speaker:</p>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: "Fire", icon: "🔥" },
+                  { label: "Clap", icon: "👏" },
+                  { label: "Genius", icon: "💡" },
+                  { label: "Crown", icon: "👑" },
+                ].map((r) => (
+                  <button
+                    key={r.label}
+                    type="button"
+                    onClick={() => handleSendReaction(r.label)}
+                    className="p-2.5 bg-slate-900 hover:bg-yellow-400/10 border border-slate-700 hover:border-yellow-400/50 rounded-2xl text-center transition-all active:scale-95 cursor-pointer"
+                  >
+                    <span className="text-lg block">{r.icon}</span>
+                    <span className="text-[9px] text-slate-400 block mt-0.5">{r.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* COORDINATOR ONLY: LIVE CROWD VOTE RESULTS & POINTS AWARD */}
+      {/* ======================================================== */}
+      {isAdmin && (
+        <div className="space-y-3">
+          {/* Audience Vote Tally Display */}
+          {effectiveGame === 'debate' && (
+            <div className="p-3 bg-slate-800/80 rounded-2xl border border-slate-700/80 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-white">
+                <span className="flex items-center gap-1.5 text-yellow-400">
+                  <Vote className="w-4 h-4" />
+                  <span>Audience Live Vote Tally:</span>
+                </span>
+                <span className="text-slate-400 font-mono">{totalVotes} total votes</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-center text-xs">
+                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold">
+                  {effectiveSpeaker?.name || 'A'}: {percentA}% ({countA} votes)
+                </div>
+                <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/30 text-sky-300 font-bold">
+                  {effectiveSpeakerB?.name || 'B'}: {percentB}% ({countB} votes)
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Points Awarding Form */}
+          <div className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Award className="w-4 h-4 text-yellow-400" />
+                <span>Coordinator Official Points Award</span>
+              </h3>
+              <span className="text-[10px] text-yellow-400 font-mono">Coordinator Exclusive</span>
+            </div>
+
+            {effectiveGame === 'debate' ? (
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  disabled={awardingPoints || !selectedSpeaker}
+                  onClick={() => handleAwardPoints(selectedSpeaker, 10, `Won Debate vs ${selectedSpeakerB?.name || 'opponent'}! 🏆`)}
+                  className="p-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <span className="text-emerald-400 font-black text-xs block truncate">🏆 {selectedSpeaker?.name || 'A'}</span>
+                  <span className="text-[9px] text-slate-400 block">+10 pts Winner</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={awardingPoints || !selectedSpeakerB}
+                  onClick={() => handleAwardPoints(selectedSpeakerB, 10, `Won Debate vs ${selectedSpeaker?.name || 'opponent'}! 🏆`)}
+                  className="p-2.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <span className="text-sky-400 font-black text-xs block truncate">🏆 {selectedSpeakerB?.name || 'B'}</span>
+                  <span className="text-[9px] text-slate-400 block">+10 pts Winner</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={awardingPoints || !selectedSpeaker || !selectedSpeakerB}
+                  onClick={async () => {
+                    await handleAwardPoints(selectedSpeaker, 5, 'Debate Tie! 🤝');
+                    await handleAwardPoints(selectedSpeakerB, 5, 'Debate Tie! 🤝');
+                  }}
+                  className="p-2.5 bg-slate-900 hover:bg-yellow-400/10 border border-slate-700 hover:border-yellow-400/40 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <span className="text-yellow-400 font-black text-xs block">🤝 Tie Battle</span>
+                  <span className="text-[9px] text-slate-400 block">+5 pts Each</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  disabled={awardingPoints || !selectedSpeaker}
+                  onClick={() => handleAwardPoints(selectedSpeaker, 5, 'Great Effort & Energy! ⚡')}
+                  className="p-2.5 bg-slate-900 hover:bg-yellow-400/10 border border-slate-700 hover:border-yellow-400/50 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <span className="text-yellow-400 font-black text-xs block">+5 pts</span>
+                  <span className="text-[9px] text-slate-400 block truncate">Good Energy ⚡</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={awardingPoints || !selectedSpeaker}
+                  onClick={() => handleAwardPoints(selectedSpeaker, 10, 'Impressive Flow & Persuasion! ⭐')}
+                  className="p-2.5 bg-slate-900 hover:bg-amber-400/10 border border-slate-700 hover:border-amber-400/50 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <span className="text-amber-400 font-black text-xs block">+10 pts</span>
+                  <span className="text-[9px] text-slate-400 block truncate">Great Flow ⭐</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={awardingPoints || !selectedSpeaker}
+                  onClick={() => handleAwardPoints(selectedSpeaker, 15, 'Masterclass Stage Delivery! 👑')}
+                  className="p-2.5 bg-slate-900 hover:bg-emerald-400/10 border border-slate-700 hover:border-emerald-400/50 rounded-xl text-center space-y-0.5 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <span className="text-emerald-400 font-black text-xs block">+15 pts</span>
+                  <span className="text-[9px] text-slate-400 block truncate">Masterclass 👑</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
