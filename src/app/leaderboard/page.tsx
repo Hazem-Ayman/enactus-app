@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { getAllMembers } from '@/lib/firestore';
 import { Member, Committee } from '@/types';
 import Avatar from '@/components/Avatar';
-import { Trophy, RefreshCw } from 'lucide-react';
+import BotAvatar from '@/components/BotAvatar';
+import { Trophy, RefreshCw, Flame } from 'lucide-react';
 
 export default function LeaderboardPage() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -109,8 +110,8 @@ export default function LeaderboardPage() {
                   {rankBadge || <span className={rankColor}>#{rank}</span>}
                 </div>
 
-                {/* Avatar */}
-                <Avatar name={member.name} size="md" />
+                {/* Bot Avatar Character */}
+                <BotAvatar config={member.avatar} name={member.name} size="md" />
 
                 {/* Member Info */}
                 <div className="flex-1 min-w-0">
@@ -124,9 +125,17 @@ export default function LeaderboardPage() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-400 block truncate">
-                    {member.committee}
-                  </span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-yellow-400 font-mono font-medium">
+                      {member.id}
+                    </span>
+                    {member.streak > 0 && (
+                      <span className="text-[10px] text-amber-400 font-bold flex items-center gap-0.5">
+                        <Flame className="w-3 h-3 fill-amber-400" />
+                        {member.streak}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Points Badge */}

@@ -12,7 +12,13 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Member, PointEvent, Committee, Feedback, SessionFeedback } from '@/types';
+import { Member, PointEvent, Committee, Feedback, SessionFeedback, AvatarConfig, Session, AttendanceRecord } from '@/types';
+
+// Helper to generate readable short ID like EN-7492
+export function generateMemberId(): string {
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  return `EN-${randomNum}`;
+}
 
 // Check if Firebase is properly configured
 export const isFirebaseConfigured = () => {
@@ -24,30 +30,51 @@ export const isFirebaseConfigured = () => {
 
 export async function createMember(data: {
   name: string;
-  committee: Committee;
-  level: number;
-  goal: string;
+  email: string;
+  avatar: AvatarConfig;
 }): Promise<Member> {
-  const memberData = {
+  const shortId = generateMemberId();
+
+  const memberData: Omit<Member, 'id'> = {
     name: data.name.trim(),
-    committee: data.committee,
-    level: data.level,
-    goal: data.goal.trim(),
+    email: data.email.trim().toLowerCase(),
+    committee: 'Presentations',
+    avatar: data.avatar,
+    streak: 0,
     totalPoints: 0,
     createdAt: Date.now(),
   };
 
-  const docRef = await addDoc(collection(db, 'members'), memberData);
-  return { id: docRef.id, ...memberData };
+  // Use the short ID as the Firestore document ID so it never changes
+  const docRef = doc(db, 'members', shortId);
+  await updateDoc(docRef, memberData as any).catch(async () => {
+    // If not existing, set it
+    const { setDoc } = await import('firebase/firestore');
+    await setDoc(docRef, memberData);
+  });
+
+  return { id: shortId, ...memberData };
 }
 
-export async function findMembersByName(name: string): Promise<Member[]> {
-  const q = query(
-    collection(db, 'members'),
-    where('name', '==', name.trim())
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Member));
+export async function updateMemberAvatar(memberId: string, avatar: AvatarConfig): Promise<void> {
+  const memberRef = doc(db, 'members', memberId);
+  await updateDoc(memberRef, { avatar });
+}
+
+export async function findMemberByEmailAndId(email: string, id: string): Promise<Member | null> {
+  const cleanId = id.trim().toUpperCase();
+  const cleanEmail = email.trim().toLowerCase();
+
+  const docRef = doc(db, 'members', cleanId);
+  const snapshot = await getDoc(docRef);
+
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data() as Omit<Member, 'id'>;
+
+  if (data.email.toLowerCase() === cleanEmail) {
+    return { id: snapshot.id, ...data };
+  }
+  return null;
 }
 
 export async function getAllMembers(): Promise<Member[]> {
@@ -61,6 +88,74 @@ export async function getMemberById(id: string): Promise<Member | null> {
   const snapshot = await getDoc(docRef);
   if (!snapshot.exists()) return null;
   return { id: snapshot.id, ...snapshot.data() } as Member;
+}
+
+// --- Priority 2: Sessions & Attendance API ---
+
+export async function createSession(title: string, date: string, theme?: string): Promise<Session> {
+  const sessionData = {
+    title: title.trim(),
+    date,
+    theme: theme?.trim() || '',
+    createdAt: Date.now(),
+  };
+  const docRef = await addDoc(collection(db, 'sessions'), sessionData);
+  return { id: docRef.id, ...sessionData };
+}
+
+export async function getAllSessions(): Promise<Session[]> {
+  const q = query(collection(db, 'sessions'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Session));
+}
+
+export async function markAttendance(
+  sessionId: string,
+  records: { memberId: string; memberName: string; status: 'present' | 'late' | 'absent' | 'excused' }[]
+): Promise<void> {
+  for (const record of records) {
+    // 1. Record attendance
+    await addDoc(collection(db, 'attendance'), {
+      sessionId,
+      memberId: record.memberId,
+      memberName: record.memberName,
+      status: record.status,
+      createdAt: Date.now(),
+    });
+
+    const memberRef = doc(db, 'members', record.memberId);
+    const memberSnap = await getDoc(memberRef);
+    if (!memberSnap.exists()) continue;
+    const currentStreak = memberSnap.data().streak || 0;
+
+    if (record.status === 'present' || record.status === 'late') {
+      const newStreak = currentStreak + 1;
+      let bonusPoints = record.status === 'present' ? 10 : 5; // Arrival points
+
+      // Milestone streak bonuses at 3, 5, 7 sessions (Priority 2)
+      if (newStreak === 3) bonusPoints += 15;
+      else if (newStreak === 5) bonusPoints += 25;
+      else if (newStreak === 7) bonusPoints += 50;
+
+      await updateDoc(memberRef, {
+        streak: newStreak,
+        totalPoints: increment(bonusPoints),
+      });
+
+      await addDoc(collection(db, 'point_events'), {
+        memberId: record.memberId,
+        memberName: record.memberName,
+        amount: bonusPoints,
+        reason: `Attended session (${record.status}) • Streak: ${newStreak} 🔥`,
+        createdAt: Date.now(),
+      });
+    } else if (record.status === 'absent') {
+      // Streak breaks unless excused
+      await updateDoc(memberRef, {
+        streak: 0,
+      });
+    }
+  }
 }
 
 // --- Points API ---

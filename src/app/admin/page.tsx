@@ -7,10 +7,13 @@ import {
   addPointEvent, 
   createMember,
   getAllFeedbackForAdmin,
-  getAllSessionFeedback 
+  getAllSessionFeedback,
+  createSession,
+  getAllSessions,
+  markAttendance 
 } from '@/lib/firestore';
-import { Member, Committee, Feedback, SessionFeedback } from '@/types';
-import Avatar from '@/components/Avatar';
+import { Member, Committee, Feedback, SessionFeedback, Session } from '@/types';
+import BotAvatar from '@/components/BotAvatar';
 import confetti from 'canvas-confetti';
 import { 
   ShieldCheck, 
@@ -25,7 +28,10 @@ import {
   Square,
   LogOut,
   MessageSquareHeart,
-  Flag
+  Flag,
+  CalendarCheck,
+  Flame,
+  CheckCircle2
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -33,14 +39,23 @@ export default function AdminPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // Active Tab: 'points' | 'picker' | 'feedback'
-  const [activeTab, setActiveTab] = useState<'points' | 'picker' | 'feedback'>('points');
+  // Active Tab: 'points' | 'picker' | 'feedback' | 'sessions'
+  const [activeTab, setActiveTab] = useState<'points' | 'picker' | 'feedback' | 'sessions'>('points');
 
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
   const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
   const [feedbackSubTab, setFeedbackSubTab] = useState<'peer' | 'session'>('peer');
+  
+  // Sessions & Attendance State (Priority 2)
+  const [sessionsList, setSessionsList] = useState<Session[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState('');
+  const [newSessionTitle, setNewSessionTitle] = useState('');
+  const [newSessionDate, setNewSessionDate] = useState('');
+  const [attendanceStatuses, setAttendanceStatuses] = useState<Record<string, 'present' | 'late' | 'absent' | 'excused'>>({});
+  const [attendanceSaving, setAttendanceSaving] = useState(false);
+  const [attendanceSuccess, setAttendanceSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Manual Points Form State
@@ -99,10 +114,60 @@ export default function AdminPage() {
       setFeedbackList(fb);
       const sfb = await getAllSessionFeedback();
       setSessionFeedbackList(sfb);
+      const sess = await getAllSessions();
+      setSessionsList(sess);
+      if (sess.length > 0 && !selectedSessionId) {
+        setSelectedSessionId(sess[0].id);
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Create New Session (Priority 2)
+  const handleCreateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSessionTitle.trim() || !newSessionDate) return;
+
+    try {
+      const created = await createSession(newSessionTitle, newSessionDate);
+      setSessionsList([created, ...sessionsList]);
+      setSelectedSessionId(created.id);
+      setNewSessionTitle('');
+      setNewSessionDate('');
+      alert(`Created ${created.title}!`);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Submit Session Attendance & Streaks (Priority 2)
+  const handleSaveAttendance = async () => {
+    if (!selectedSessionId) {
+      alert('Please select or create a session first.');
+      return;
+    }
+
+    setAttendanceSaving(true);
+    setAttendanceSuccess('');
+
+    try {
+      const records = members.map((m) => ({
+        memberId: m.id,
+        memberName: m.name,
+        status: attendanceStatuses[m.id] || 'present', // Default to present
+      }));
+
+      await markAttendance(selectedSessionId, records);
+      setAttendanceSuccess('Attendance recorded! Streaks and points updated for all members! 🔥');
+      await loadMembers();
+      confetti({ particleCount: 70, spread: 70 });
+    } catch (err: any) {
+      alert('Error saving attendance: ' + err.message);
+    } finally {
+      setAttendanceSaving(false);
     }
   };
 
@@ -276,7 +341,7 @@ export default function AdminPage() {
       </div>
 
       {/* Admin Nav Tabs */}
-      <div className="grid grid-cols-3 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+      <div className="grid grid-cols-4 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => setActiveTab('points')}
           className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
@@ -286,7 +351,18 @@ export default function AdminPage() {
           }`}
         >
           <Award className="w-3.5 h-3.5" />
-          <span>Points</span>
+          <span className="truncate">Points</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('sessions')}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            activeTab === 'sessions'
+              ? 'bg-yellow-400 text-slate-950 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <CalendarCheck className="w-3.5 h-3.5" />
+          <span className="truncate">Sessions</span>
         </button>
         <button
           onClick={() => setActiveTab('picker')}
@@ -297,7 +373,7 @@ export default function AdminPage() {
           }`}
         >
           <Shuffle className="w-3.5 h-3.5" />
-          <span>Picker</span>
+          <span className="truncate">Picker</span>
         </button>
         <button
           onClick={() => setActiveTab('feedback')}
@@ -308,7 +384,7 @@ export default function AdminPage() {
           }`}
         >
           <MessageSquareHeart className="w-3.5 h-3.5" />
-          <span>Feedback</span>
+          <span className="truncate">Feedback</span>
         </button>
       </div>
 
@@ -333,7 +409,7 @@ export default function AdminPage() {
                 <label className="text-xs text-slate-300 font-medium">Select Member</label>
                 <input
                   type="text"
-                  placeholder="Type to filter member names..."
+                  placeholder="Type to filter member names or IDs..."
                   value={pointsSearch}
                   onChange={(e) => setPointsSearch(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white mb-2"
@@ -347,10 +423,13 @@ export default function AdminPage() {
                 >
                   <option value="">-- Choose a member --</option>
                   {members
-                    .filter((m) => m.name.toLowerCase().includes(pointsSearch.toLowerCase()))
+                    .filter((m) => 
+                      m.name.toLowerCase().includes(pointsSearch.toLowerCase()) ||
+                      m.id.toLowerCase().includes(pointsSearch.toLowerCase())
+                    )
                     .map((m) => (
                       <option key={m.id} value={m.id}>
-                        {m.name} ({m.committee}) - {m.totalPoints || 0} pts
+                        {m.name} [{m.id}] - {m.totalPoints || 0} pts (🔥 {m.streak || 0})
                       </option>
                     ))}
                 </select>
@@ -411,7 +490,142 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* --- TAB 2: SESSION PICKER & GROUPS --- */}
+      {/* --- TAB 2: SESSIONS & ATTENDANCE STREAKS (Priority 2) --- */}
+      {activeTab === 'sessions' && (
+        <div className="space-y-4">
+          {/* Create Session Form */}
+          <form
+            onSubmit={handleCreateSession}
+            className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3"
+          >
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <CalendarCheck className="w-4 h-4 text-yellow-400" />
+              <span>Create New Presentations Session</span>
+            </h3>
+
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Session Title (e.g. Session 1: Hooking Audiences)"
+                value={newSessionTitle}
+                onChange={(e) => setNewSessionTitle(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                required
+              />
+              <input
+                type="date"
+                value={newSessionDate}
+                onChange={(e) => setNewSessionDate(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-yellow-400 font-bold rounded-xl text-xs transition-all"
+            >
+              + Create Session
+            </button>
+          </form>
+
+          {/* Active Session & Attendance Marking */}
+          <div className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-white flex items-center gap-1">
+                  <Flame className="w-4 h-4 text-amber-400 fill-amber-400" />
+                  <span>Mark Attendance & Fire Streaks</span>
+                </h3>
+                <p className="text-[10px] text-slate-400">
+                  Present gives +10 pts, Late gives +5 pts, Milestone bonuses at 3, 5, 7 streak!
+                </p>
+              </div>
+
+              {sessionsList.length > 0 && (
+                <select
+                  value={selectedSessionId}
+                  onChange={(e) => setSelectedSessionId(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-yellow-400 font-bold"
+                >
+                  {sessionsList.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title} ({s.date})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {attendanceSuccess && (
+              <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-xl flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{attendanceSuccess}</span>
+              </div>
+            )}
+
+            {/* Attendance Matrix for all members */}
+            <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+              {members.map((m) => {
+                const currentStatus = attendanceStatuses[m.id] || 'present';
+                return (
+                  <div
+                    key={m.id}
+                    className="p-2.5 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <BotAvatar config={m.avatar} size="sm" />
+                      <div>
+                        <span className="text-xs font-bold text-white block truncate">{m.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {m.id} • Streak: 🔥 {m.streak || 0}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status Toggle Buttons */}
+                    <div className="flex gap-1">
+                      {(['present', 'late', 'absent', 'excused'] as const).map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() =>
+                            setAttendanceStatuses((prev) => ({ ...prev, [m.id]: status }))
+                          }
+                          className={`px-2 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wider transition-all ${
+                            currentStatus === status
+                              ? status === 'present'
+                                ? 'bg-emerald-500 text-slate-950 font-black'
+                                : status === 'late'
+                                ? 'bg-amber-400 text-slate-950 font-black'
+                                : status === 'absent'
+                                ? 'bg-rose-500 text-white font-black'
+                                : 'bg-blue-500 text-white font-black'
+                              : 'bg-slate-800 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {status[0]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={handleSaveAttendance}
+              disabled={attendanceSaving || members.length === 0}
+              className="w-full py-3 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 mt-2"
+            >
+              <Flame className="w-4 h-4" />
+              <span>{attendanceSaving ? 'Updating Streaks...' : 'Submit Attendance & Update Streaks 🔥'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB 3: SESSION PICKER & GROUPS --- */}
       {activeTab === 'picker' && (
         <div className="space-y-4">
           {/* Action Boxes: Random Picker & Groups */}
@@ -444,7 +658,7 @@ export default function AdminPage() {
                 🎉 Selected Participant
               </span>
               <div className="flex items-center justify-center gap-3">
-                <Avatar name={selectedPickerMember.name} size="lg" />
+                <BotAvatar config={selectedPickerMember.avatar} size="lg" />
                 <div className="text-left">
                   <h3 className="font-extrabold text-base text-white">
                     {selectedPickerMember.name}

@@ -1,12 +1,36 @@
 export type Committee = 'Presentations';
 
+export interface AvatarConfig {
+  color: string; // e.g. 'blue', 'orange', 'pink', 'purple', 'green', 'red'
+  shape: 'circle' | 'square' | 'rounded'; // Head shape
+  accessory: 'none' | 'glasses' | 'sunglasses' | 'antenna' | 'horns' | 'vr' | 'heart_eyes'; // What to wear on face
+}
+
 export interface Member {
-  id: string;
+  id: string; // Auto-generated short unique ID (e.g. EN-8492)
   name: string;
+  email: string;
   committee: Committee;
-  level: number; // 1 to 5
-  goal: string;
+  avatar: AvatarConfig;
+  streak: number; // consecutive attended sessions
   totalPoints: number;
+  createdAt: number;
+}
+
+export interface Session {
+  id: string;
+  title: string;
+  date: string;
+  theme?: string;
+  createdAt: number;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  sessionId: string;
+  memberId: string;
+  memberName: string;
+  status: 'present' | 'late' | 'absent' | 'excused';
   createdAt: number;
 }
 
