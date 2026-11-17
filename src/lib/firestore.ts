@@ -15,7 +15,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Member, PointEvent, Committee, Feedback, SessionFeedback, AvatarConfig, Session, SavedGroup, BuddyConnection } from '@/types';
+import { Member, PointEvent, Committee, Feedback, SessionFeedback, AvatarConfig, Session, AttendanceRecord, SavedGroup, BuddyConnection } from '@/types';
 
 // Helper to generate readable short ID like EN-7492
 export function generateMemberId(): string {
@@ -286,67 +286,120 @@ export async function getAllSessions(): Promise<Session[]> {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Session));
 }
 
+export async function getSessionAttendance(sessionId: string): Promise<AttendanceRecord[]> {
+  const q = query(collection(db, 'attendance'), where('sessionId', '==', sessionId));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() } as AttendanceRecord));
+}
+
 export async function markAttendance(
   sessionId: string,
-  records: { memberId: string; memberName: string; status: 'present' | 'late' | 'absent' | 'excused' }[]
+  records: { memberId: string; memberName: string; status: 'present' | 'late' | 'absent' | 'excused' }[],
+  isUpdate: boolean = false
 ): Promise<void> {
+  const sessionRef = doc(db, 'sessions', sessionId);
+
+  let present = 0;
+  let late = 0;
+  let absent = 0;
+  let excused = 0;
+
   for (const record of records) {
-    // 1. Record attendance
-    await addDoc(collection(db, 'attendance'), {
+    if (record.status === 'present') present++;
+    else if (record.status === 'late') late++;
+    else if (record.status === 'absent') absent++;
+    else if (record.status === 'excused') excused++;
+
+    // 1. Record attendance using deterministic ID per session & member
+    const recordDocRef = doc(db, 'attendance', `${sessionId}_${record.memberId}`);
+    await setDoc(recordDocRef, {
       sessionId,
       memberId: record.memberId,
       memberName: record.memberName,
       status: record.status,
+      updatedAt: Date.now(),
       createdAt: Date.now(),
-    });
+    }, { merge: true });
 
-    const memberRef = doc(db, 'members', record.memberId);
-    const memberSnap = await getDoc(memberRef);
-    if (!memberSnap.exists()) continue;
-    const currentStreak = memberSnap.data().streak || 0;
+    // 2. Only award streaks & points if this is the FIRST time submitting attendance for this session!
+    // Prevents infinite points and streaks farming on repeat submissions
+    if (!isUpdate) {
+      const memberRef = doc(db, 'members', record.memberId);
+      const memberSnap = await getDoc(memberRef);
+      if (!memberSnap.exists()) continue;
+      const currentStreak = memberSnap.data().streak || 0;
 
-    if (record.status === 'present') {
-      const newStreak = currentStreak + 1;
-      // Bonus formula: Base 10 points for attending + (streak * 5) bonus for EVERY streak session!
-      // Streak 1: 10 + 5 = 15 pts
-      // Streak 2: 10 + 10 = 20 pts
-      // Streak 3: 10 + 15 = 25 pts
-      // Streak 4: 10 + 20 = 30 pts, etc.
-      const streakBonus = newStreak * 5;
-      const totalSessionPoints = 10 + streakBonus;
+      if (record.status === 'present') {
+        const newStreak = currentStreak + 1;
+        const streakBonus = newStreak * 5;
+        const totalSessionPoints = 10 + streakBonus;
 
-      await updateDoc(memberRef, {
-        streak: newStreak,
-        totalPoints: increment(totalSessionPoints),
-      });
+        await updateDoc(memberRef, {
+          streak: newStreak,
+          totalPoints: increment(totalSessionPoints),
+        });
 
-      await addDoc(collection(db, 'point_events'), {
-        memberId: record.memberId,
-        memberName: record.memberName,
-        amount: totalSessionPoints,
-        reason: `Session Present (+10 pts) + Streak #${newStreak} Bonus (+${streakBonus} pts) 🔥`,
-        createdAt: Date.now(),
-      });
-    } else if (record.status === 'late') {
-      // Late: ONLY 5 base points. NO streak bonus, and streak does not advance.
-      await updateDoc(memberRef, {
-        totalPoints: increment(5),
-      });
+        await addDoc(collection(db, 'point_events'), {
+          memberId: record.memberId,
+          memberName: record.memberName,
+          amount: totalSessionPoints,
+          reason: `Session Present (+10 pts) + Streak #${newStreak} Bonus (+${streakBonus} pts) 🔥`,
+          createdAt: Date.now(),
+        });
+      } else if (record.status === 'late') {
+        await updateDoc(memberRef, {
+          totalPoints: increment(5),
+        });
 
-      await addDoc(collection(db, 'point_events'), {
-        memberId: record.memberId,
-        memberName: record.memberName,
-        amount: 5,
-        reason: 'Session Attendance (Late arrival: +5 pts, no streak bonus)',
-        createdAt: Date.now(),
-      });
-    } else if (record.status === 'absent') {
-      // Streak breaks unless excused
-      await updateDoc(memberRef, {
-        streak: 0,
-      });
+        await addDoc(collection(db, 'point_events'), {
+          memberId: record.memberId,
+          memberName: record.memberName,
+          amount: 5,
+          reason: 'Session Attendance (Late arrival: +5 pts, no streak bonus)',
+          createdAt: Date.now(),
+        });
+      } else if (record.status === 'absent') {
+        await updateDoc(memberRef, {
+          streak: 0,
+        });
+      }
     }
   }
+
+  // 3. Update session document status and summary
+  await updateDoc(sessionRef, {
+    attendanceSubmitted: true,
+    submittedAt: Date.now(),
+    attendanceSummary: { present, late, absent, excused },
+  });
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  // Delete session document
+  await deleteDoc(doc(db, 'sessions', sessionId));
+
+  // Delete all attendance records for this session
+  const q = query(collection(db, 'attendance'), where('sessionId', '==', sessionId));
+  const snap = await getDocs(q);
+  for (const d of snap.docs) {
+    await deleteDoc(d.ref);
+  }
+}
+
+export async function clearSessionAttendance(sessionId: string): Promise<void> {
+  // Delete all attendance records for this session
+  const q = query(collection(db, 'attendance'), where('sessionId', '==', sessionId));
+  const snap = await getDocs(q);
+  for (const d of snap.docs) {
+    await deleteDoc(d.ref);
+  }
+
+  // Reset session status
+  await updateDoc(doc(db, 'sessions', sessionId), {
+    attendanceSubmitted: false,
+    submittedAt: null,
+    attendanceSummary: null,
+  });
 }
 
 // --- Points API ---

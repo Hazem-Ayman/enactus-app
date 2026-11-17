@@ -28,6 +28,23 @@ export interface Session {
   date: string;
   theme?: string;
   createdAt: number;
+  attendanceSubmitted?: boolean;
+  submittedAt?: number;
+  attendanceSummary?: {
+    present: number;
+    late: number;
+    absent: number;
+    excused: number;
+  };
+}
+
+export interface AttendanceRecord {
+  id: string;
+  sessionId: string;
+  memberId: string;
+  memberName: string;
+  status: 'present' | 'late' | 'absent' | 'excused';
+  createdAt: number;
 }
 
 export interface SavedGroup {

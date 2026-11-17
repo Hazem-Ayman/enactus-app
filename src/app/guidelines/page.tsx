@@ -2,38 +2,178 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, BookOpen, Star, Award, ShieldAlert, Users } from 'lucide-react';
-import { getGuidelinesContent } from '@/lib/firestore';
+import { 
+  ArrowLeft, 
+  BookOpen, 
+  Star, 
+  Award, 
+  ShieldAlert, 
+  Users, 
+  Edit2, 
+  Save, 
+  Trash2, 
+  CheckCircle2 
+} from 'lucide-react';
+import { 
+  getGuidelinesContent, 
+  updateGuidelinesContent, 
+  deleteGuidelinesContent 
+} from '@/lib/firestore';
 
 export default function GuidelinesPage() {
   const [customContent, setCustomContent] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     async function load() {
       const content = await getGuidelinesContent();
-      if (content) setCustomContent(content);
+      if (content) {
+        setCustomContent(content);
+        setEditText(content);
+      }
     }
     load();
+    checkRole();
   }, []);
+
+  const checkRole = () => {
+    try {
+      const saved = localStorage.getItem('enactus_member');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.id === 'ENC-2302' || parsed.role === 'admin') {
+          setIsAdmin(true);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await updateGuidelinesContent(editText);
+      setCustomContent(editText);
+      setIsEditing(false);
+      setMsg('Guidelines updated and published live!');
+      setTimeout(() => setMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error updating guidelines: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Delete custom guidelines? It will revert back to standard defaults.')) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await deleteGuidelinesContent();
+      setCustomContent(null);
+      setEditText('');
+      setIsEditing(false);
+      setMsg('Custom guidelines deleted.');
+      setTimeout(() => setMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error deleting guidelines: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link
-          href="/"
-          className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-yellow-400" />
-            Beta Guidelines
-          </h1>
-          <p className="text-xs text-slate-400">Everything you need to know about points & sessions</p>
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-yellow-400" />
+              <span>Guidelines</span>
+            </h1>
+            <p className="text-xs text-slate-400">Everything you need to know about points & sessions</p>
+          </div>
         </div>
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => setIsEditing(!isEditing)}
+            className="px-3 py-1.5 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+            <span>{isEditing ? 'Close Editor' : 'Edit Rules'}</span>
+          </button>
+        )}
       </div>
+
+      {msg && (
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs rounded-xl flex items-center gap-1.5 font-medium">
+          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+          <span>{msg}</span>
+        </div>
+      )}
+
+      {/* Admin Live Guidelines Editor */}
+      {isAdmin && isEditing && (
+        <form onSubmit={handleSave} className="p-4 bg-slate-800/80 border-2 border-yellow-400/60 rounded-3xl space-y-3 shadow-xl">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Edit2 className="w-4 h-4 text-yellow-400" />
+              <span>Coordinator Live Guidelines Editor</span>
+            </h3>
+            <span className="text-[10px] text-yellow-400 font-mono">Live updates</span>
+          </div>
+          <p className="text-[11px] text-slate-300">
+            Write rules, session requirements, or expectations. Any changes saved here show up immediately for all members.
+          </p>
+
+          <textarea
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            rows={8}
+            placeholder="Write customized rules, session tips, or guidelines here..."
+            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>{saving ? 'Publishing...' : 'Save & Publish Live'}</span>
+            </button>
+
+            {customContent && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={saving}
+                className="px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            )}
+          </div>
+        </form>
+      )}
 
       {/* If custom coordinator guidelines exist, show them prominently */}
       {customContent && (

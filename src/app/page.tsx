@@ -307,7 +307,7 @@ export default function HomePage() {
             </div>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Manage points, sessions, streaks, members & guidelines directly below:
+            Manage live session points, random picker & feature toggles below:
           </p>
         </div>
 
