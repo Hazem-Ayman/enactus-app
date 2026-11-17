@@ -28,12 +28,22 @@ export interface Session {
   createdAt: number;
 }
 
-export interface AttendanceRecord {
+export interface SavedGroup {
   id: string;
-  sessionId: string;
-  memberId: string;
-  memberName: string;
-  status: 'present' | 'late' | 'absent' | 'excused';
+  name: string; // e.g. "Session 1 Groups"
+  createdAt: number;
+  groups: {
+    teamNumber: number;
+    members: { id: string; name: string }[];
+  }[];
+}
+
+export interface BuddyConnection {
+  id: string;
+  memberAId: string;
+  memberAName: string;
+  memberBId: string;
+  memberBName: string;
   createdAt: number;
 }
 

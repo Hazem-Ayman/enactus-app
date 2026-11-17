@@ -12,7 +12,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Member, PointEvent, Committee, Feedback, SessionFeedback, AvatarConfig, Session, AttendanceRecord } from '@/types';
+import { Member, PointEvent, Committee, Feedback, SessionFeedback, AvatarConfig, Session, SavedGroup, BuddyConnection } from '@/types';
 
 // Helper to generate readable short ID like EN-7492
 export function generateMemberId(): string {
@@ -237,10 +237,136 @@ export async function addPointEvent(
   });
 }
 
-export async function getPointEvents(): Promise<PointEvent[]> {
-  const q = query(collection(db, 'point_events'), orderBy('createdAt', 'desc'));
+export async function getMemberPointHistory(memberId: string): Promise<PointEvent[]> {
+  const q = query(
+    collection(db, 'point_events'),
+    where('memberId', '==', memberId)
+  );
   const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PointEvent));
+  const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PointEvent));
+  return events.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+// --- Priority 4: Saved Session Groups ---
+
+export async function saveSessionGroups(name: string, groups: { teamNumber: number; members: { id: string; name: string }[] }[]): Promise<void> {
+  const docRef = doc(db, 'settings', 'latest_groups');
+  const { setDoc } = await import('firebase/firestore');
+  await setDoc(docRef, {
+    name,
+    groups,
+    createdAt: Date.now(),
+  });
+}
+
+export async function getLatestSavedGroups(): Promise<SavedGroup | null> {
+  const docRef = doc(db, 'settings', 'latest_groups');
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as SavedGroup;
+}
+
+// --- Priority 4: Editable Guidelines ---
+
+export async function getGuidelinesContent(): Promise<string | null> {
+  const docRef = doc(db, 'settings', 'guidelines');
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) return null;
+  return snap.data().content || null;
+}
+
+export async function updateGuidelinesContent(content: string): Promise<void> {
+  const docRef = doc(db, 'settings', 'guidelines');
+  const { setDoc } = await import('firebase/firestore');
+  await setDoc(docRef, {
+    content,
+    updatedAt: Date.now(),
+  });
+}
+
+// --- Priority 4: Buddy System via Code / QR ---
+
+export async function connectBuddies(
+  memberA: { id: string; name: string },
+  memberBId: string
+): Promise<{ success: boolean; message: string; buddyName?: string }> {
+  const cleanBId = memberBId.trim().toUpperCase();
+
+  if (memberA.id === cleanBId) {
+    return { success: false, message: 'You cannot add yourself as a buddy!' };
+  }
+
+  // Lookup Member B
+  const bRef = doc(db, 'members', cleanBId);
+  const bSnap = await getDoc(bRef);
+  if (!bSnap.exists()) {
+    return { success: false, message: 'Invalid Member ID. Please check the code.' };
+  }
+  const bData = bSnap.data() as Member;
+
+  // Check if already buddies
+  const q1 = query(
+    collection(db, 'buddies'),
+    where('memberAId', 'in', [memberA.id, cleanBId])
+  );
+  const existingSnaps = await getDocs(q1);
+  const alreadyConnected = existingSnaps.docs.some((d) => {
+    const data = d.data();
+    return (
+      (data.memberAId === memberA.id && data.memberBId === cleanBId) ||
+      (data.memberAId === cleanBId && data.memberBId === memberA.id)
+    );
+  });
+
+  if (alreadyConnected) {
+    return { success: false, message: `You and ${bData.name} are already buddies!` };
+  }
+
+  // Record buddy connection
+  await addDoc(collection(db, 'buddies'), {
+    memberAId: memberA.id,
+    memberAName: memberA.name,
+    memberBId: cleanBId,
+    memberBName: bData.name,
+    createdAt: Date.now(),
+  });
+
+  // Award +15 Buddy Points to Member A
+  await addPointEvent(
+    memberA.id,
+    memberA.name,
+    15,
+    `Connected with Buddy ${bData.name} [${cleanBId}]! 🤝`
+  );
+
+  // Award +15 Buddy Points to Member B
+  await addPointEvent(
+    cleanBId,
+    bData.name,
+    15,
+    `Connected with Buddy ${memberA.name} [${memberA.id}]! 🤝`
+  );
+
+  return { success: true, message: `Successfully connected with ${bData.name}! You both earned +15 points! 🎉`, buddyName: bData.name };
+}
+
+export async function getMemberBuddies(memberId: string): Promise<{ id: string; name: string }[]> {
+  const qA = query(collection(db, 'buddies'), where('memberAId', '==', memberId));
+  const qB = query(collection(db, 'buddies'), where('memberBId', '==', memberId));
+
+  const [snapA, snapB] = await Promise.all([getDocs(qA), getDocs(qB)]);
+
+  const buddies: { id: string; name: string }[] = [];
+  snapA.docs.forEach((d) => {
+    const data = d.data();
+    buddies.push({ id: data.memberBId, name: data.memberBName });
+  });
+  snapB.docs.forEach((d) => {
+    const data = d.data();
+    buddies.push({ id: data.memberAId, name: data.memberAName });
+  });
+
+  return buddies;
 }
 
 // --- Feedback API (Priority 1: 2 Stars and 1 Wish) ---

@@ -10,7 +10,10 @@ import {
   getAllSessionFeedback,
   createSession,
   getAllSessions,
-  markAttendance 
+  markAttendance,
+  saveSessionGroups,
+  getGuidelinesContent,
+  updateGuidelinesContent 
 } from '@/lib/firestore';
 import { Member, Committee, Feedback, SessionFeedback, Session } from '@/types';
 import BotAvatar from '@/components/BotAvatar';
@@ -25,13 +28,15 @@ import {
   Search, 
   Award, 
   CheckSquare, 
-  Square,
-  LogOut,
-  MessageSquareHeart,
-  Flag,
-  CalendarCheck,
-  Flame,
-  CheckCircle2
+  Square, 
+  LogOut, 
+  MessageSquareHeart, 
+  Flag, 
+  CalendarCheck, 
+  Flame, 
+  CheckCircle2,
+  BookOpen,
+  Save
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -48,7 +53,11 @@ export default function AdminPage() {
   const [sessionFeedbackList, setSessionFeedbackList] = useState<SessionFeedback[]>([]);
   const [feedbackSubTab, setFeedbackSubTab] = useState<'peer' | 'session'>('peer');
   
-  // Sessions & Attendance State (Priority 2)
+  // Priority 4: Editable Guidelines & Saved Groups State
+  const [guidelinesText, setGuidelinesText] = useState('');
+  const [guidelinesSaving, setGuidelinesSaving] = useState(false);
+  const [guidelinesMsg, setGuidelinesMsg] = useState('');
+  const [groupsSavedMsg, setGroupsSavedMsg] = useState('');
   const [sessionsList, setSessionsList] = useState<Session[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState('');
   const [newSessionTitle, setNewSessionTitle] = useState('');
@@ -119,6 +128,8 @@ export default function AdminPage() {
       if (sess.length > 0 && !selectedSessionId) {
         setSelectedSessionId(sess[0].id);
       }
+      const gGuide = await getGuidelinesContent();
+      if (gGuide) setGuidelinesText(gGuide);
     } catch (err) {
       console.error(err);
     } finally {
@@ -126,7 +137,37 @@ export default function AdminPage() {
     }
   };
 
-  // Create New Session (Priority 2)
+  // Save guidelines to Firestore
+  const handleSaveGuidelines = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGuidelinesSaving(true);
+    setGuidelinesMsg('');
+    try {
+      await updateGuidelinesContent(guidelinesText);
+      setGuidelinesMsg('Guidelines updated live for all members!');
+      setTimeout(() => setGuidelinesMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error saving guidelines: ' + err.message);
+    } finally {
+      setGuidelinesSaving(false);
+    }
+  };
+
+  // Save generated groups for today's session (Priority 4)
+  const handleSaveSessionGroups = async () => {
+    if (generatedGroups.length === 0) return;
+    try {
+      const payload = generatedGroups.map((group, idx) => ({
+        teamNumber: idx + 1,
+        members: group.map((m) => ({ id: m.id, name: m.name })),
+      }));
+      await saveSessionGroups("Today's Session Teams", payload);
+      setGroupsSavedMsg('Groups saved! Members can now see their team on Home.');
+      setTimeout(() => setGroupsSavedMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error saving groups: ' + err.message);
+    }
+  };
   const handleCreateSession = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSessionTitle.trim() || !newSessionDate) return;
@@ -341,7 +382,7 @@ export default function AdminPage() {
       </div>
 
       {/* Admin Nav Tabs */}
-      <div className="grid grid-cols-4 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+      <div className="grid grid-cols-5 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => setActiveTab('points')}
           className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
@@ -385,6 +426,17 @@ export default function AdminPage() {
         >
           <MessageSquareHeart className="w-3.5 h-3.5" />
           <span className="truncate">Feedback</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('guidelines' as any)}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            (activeTab as any) === 'guidelines'
+              ? 'bg-yellow-400 text-slate-950 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          <span className="truncate">Guide</span>
         </button>
       </div>
 
@@ -694,9 +746,24 @@ export default function AdminPage() {
           {/* Generated Groups Display */}
           {generatedGroups.length > 0 && (
             <div className="space-y-2">
-              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Shuffled Groups ({generatedGroups.length})
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Shuffled Groups ({generatedGroups.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={handleSaveSessionGroups}
+                  className="px-3 py-1 bg-indigo-500 hover:bg-indigo-400 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                >
+                  Save Groups to Members' Home 💾
+                </button>
+              </div>
+
+              {groupsSavedMsg && (
+                <div className="p-2 bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs rounded-xl font-medium">
+                  {groupsSavedMsg}
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-2">
                 {generatedGroups.map((group, gIdx) => (
                   <div
@@ -913,6 +980,40 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+      )}
+      {/* --- TAB 5: EDITABLE GUIDELINES (Priority 4) --- */}
+      {(activeTab as any) === 'guidelines' && (
+        <form onSubmit={handleSaveGuidelines} className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <BookOpen className="w-4 h-4 text-yellow-400" />
+              <span>Edit Live Guidelines Content</span>
+            </h3>
+            {guidelinesMsg && (
+              <span className="text-[10px] text-emerald-400 font-bold">{guidelinesMsg}</span>
+            )}
+          </div>
+          <p className="text-[11px] text-slate-400">
+            Write or edit rules, session tips, and guidelines. Updates show up immediately for all members.
+          </p>
+
+          <textarea
+            value={guidelinesText}
+            onChange={(e) => setGuidelinesText(e.target.value)}
+            rows={10}
+            placeholder="Type your updated guidelines here..."
+            className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-yellow-400"
+          />
+
+          <button
+            type="submit"
+            disabled={guidelinesSaving}
+            className="w-full py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+          >
+            <Save className="w-4 h-4" />
+            <span>{guidelinesSaving ? 'Saving Changes...' : 'Save & Publish Guidelines Live'}</span>
+          </button>
+        </form>
       )}
     </div>
   );

@@ -45,6 +45,9 @@ export default function LeaderboardPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Filter out coordinator ENC-2302 from member ranking list
+  const rankedMembers = members.filter((m) => m.id !== 'ENC-2302');
+
   return (
     <div className="space-y-4 pb-4">
       {/* Header */}
@@ -69,16 +72,16 @@ export default function LeaderboardPage() {
 
       {/* Leaderboard List */}
       <div className="space-y-2 mt-2">
-        {loading && members.length === 0 ? (
+        {loading && rankedMembers.length === 0 ? (
           <div className="text-center py-12 text-slate-400 text-xs">
             Loading ranks...
           </div>
-        ) : members.length === 0 ? (
+        ) : rankedMembers.length === 0 ? (
           <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-800 text-slate-400 text-xs">
             No members registered yet.
           </div>
         ) : (
-          members.map((member, index) => {
+          rankedMembers.map((member, index) => {
             const rank = index + 1;
             const isCurrent = member.id === currentMemberId;
 

@@ -1,8 +1,21 @@
-import React from 'react';
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, Star, Award, ShieldAlert, Users } from 'lucide-react';
+import { getGuidelinesContent } from '@/lib/firestore';
 
 export default function GuidelinesPage() {
+  const [customContent, setCustomContent] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      const content = await getGuidelinesContent();
+      if (content) setCustomContent(content);
+    }
+    load();
+  }, []);
+
   return (
     <div className="space-y-6 pb-6">
       {/* Header */}
@@ -21,6 +34,19 @@ export default function GuidelinesPage() {
           <p className="text-xs text-slate-400">Everything you need to know about points & sessions</p>
         </div>
       </div>
+
+      {/* If custom coordinator guidelines exist, show them prominently */}
+      {customContent && (
+        <section className="bg-slate-800/80 rounded-2xl p-4 border border-yellow-400/40 space-y-2">
+          <div className="flex items-center gap-2 text-yellow-400 font-semibold text-xs">
+            <Award className="w-4 h-4" />
+            <span>Coordinator Announcements & Rules</span>
+          </div>
+          <div className="text-xs text-slate-200 whitespace-pre-wrap leading-relaxed">
+            {customContent}
+          </div>
+        </section>
+      )}
 
       {/* Section 1: How Points Work */}
       <section className="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/60 space-y-3">
