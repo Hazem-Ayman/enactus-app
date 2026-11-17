@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import {
   findMemberByEmailAndId,
   createMember,
@@ -23,7 +22,6 @@ import {
   BookOpen,
   Award,
   Sparkles,
-  ArrowRight,
   LogOut,
   UserPlus,
   LogIn,
@@ -459,44 +457,7 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Quick Action Navigation */}
-        <div className="space-y-2">
-          <Link
-            href="/feedback"
-            className="flex items-center justify-between p-4 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-2xl transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-400/10 text-amber-400">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white group-hover:text-amber-400 transition-colors">
-                  Feedback Center
-                </h3>
-                <p className="text-[11px] text-slate-400">2 Stars & 1 Wish • Session evaluation (+5 pts)</p>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-transform group-hover:translate-x-1" />
-          </Link>
 
-          <Link
-            href="/leaderboard"
-            className="flex items-center justify-between p-4 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-2xl transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-yellow-400/10 text-yellow-400">
-                <Trophy className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white group-hover:text-yellow-400 transition-colors">
-                  Check Leaderboard
-                </h3>
-                <p className="text-[11px] text-slate-400">See your ranking and live standings</p>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-yellow-400 transition-transform group-hover:translate-x-1" />
-          </Link>
-        </div>
 
         {/* Priority 4: MODAL 1 - Point History Breakdown */}
         {showHistoryModal && (
