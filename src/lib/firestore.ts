@@ -12,7 +12,7 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Member, PointEvent, Committee } from '@/types';
+import { Member, PointEvent, Committee, Feedback } from '@/types';
 
 // Check if Firebase is properly configured
 export const isFirebaseConfigured = () => {
@@ -92,3 +92,58 @@ export async function getPointEvents(): Promise<PointEvent[]> {
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PointEvent));
 }
+
+// --- Feedback API (Priority 1: 2 Stars and 1 Wish) ---
+
+export async function submitFeedback(data: {
+  fromMemberId: string;
+  fromMemberName: string;
+  toMemberId: string;
+  toMemberName: string;
+  star1: string;
+  star2: string;
+  wish: string;
+}): Promise<void> {
+  // 1. Save feedback
+  await addDoc(collection(db, 'feedback'), {
+    fromMemberId: data.fromMemberId,
+    fromMemberName: data.fromMemberName,
+    toMemberId: data.toMemberId,
+    toMemberName: data.toMemberName,
+    star1: data.star1.trim(),
+    star2: data.star2.trim(),
+    wish: data.wish.trim(),
+    flagged: false,
+    createdAt: Date.now(),
+  });
+
+  // 2. Award reward points for giving constructive feedback (+5 pts)
+  await addPointEvent(
+    data.fromMemberId,
+    data.fromMemberName,
+    5,
+    `Gave constructive feedback to ${data.toMemberName}`
+  );
+}
+
+export async function getReceivedFeedback(memberId: string): Promise<Feedback[]> {
+  const q = query(
+    collection(db, 'feedback'),
+    where('toMemberId', '==', memberId)
+  );
+  const snapshot = await getDocs(q);
+  const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Feedback));
+  return list.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function getAllFeedbackForAdmin(): Promise<Feedback[]> {
+  const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Feedback));
+}
+
+export async function flagFeedback(feedbackId: string, flagged: boolean = true): Promise<void> {
+  const ref = doc(db, 'feedback', feedbackId);
+  await updateDoc(ref, { flagged });
+}
+

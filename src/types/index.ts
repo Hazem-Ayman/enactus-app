@@ -18,3 +18,17 @@ export interface PointEvent {
   reason: string;
   createdAt: number;
 }
+
+export interface Feedback {
+  id: string;
+  fromMemberId: string;
+  fromMemberName: string;
+  toMemberId: string;
+  toMemberName: string;
+  star1: string;
+  star2: string;
+  wish: string;
+  sessionId?: string;
+  flagged?: boolean;
+  createdAt: number;
+}

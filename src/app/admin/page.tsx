@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { 
   getAllMembers, 
   addPointEvent, 
-  createMember 
+  createMember,
+  getAllFeedbackForAdmin 
 } from '@/lib/firestore';
-import { Member, Committee } from '@/types';
+import { Member, Committee, Feedback } from '@/types';
 import Avatar from '@/components/Avatar';
 import confetti from 'canvas-confetti';
 import { 
@@ -21,7 +22,9 @@ import {
   Award, 
   CheckSquare, 
   Square,
-  LogOut
+  LogOut,
+  MessageSquareHeart,
+  Flag
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -29,11 +32,12 @@ export default function AdminPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // Active Tab: 'points' | 'picker'
-  const [activeTab, setActiveTab] = useState<'points' | 'picker'>('points');
+  // Active Tab: 'points' | 'picker' | 'feedback'
+  const [activeTab, setActiveTab] = useState<'points' | 'picker' | 'feedback'>('points');
 
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
+  const [feedbackList, setFeedbackList] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Manual Points Form State
@@ -88,6 +92,8 @@ export default function AdminPage() {
     try {
       const data = await getAllMembers();
       setMembers(data);
+      const fb = await getAllFeedbackForAdmin();
+      setFeedbackList(fb);
     } catch (err) {
       console.error(err);
     } finally {
@@ -265,28 +271,39 @@ export default function AdminPage() {
       </div>
 
       {/* Admin Nav Tabs */}
-      <div className="grid grid-cols-2 gap-2 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+      <div className="grid grid-cols-3 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => setActiveTab('points')}
-          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+          className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
             activeTab === 'points'
               ? 'bg-yellow-400 text-slate-950 shadow-sm'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Award className="w-4 h-4" />
-          <span>Manual Points</span>
+          <Award className="w-3.5 h-3.5" />
+          <span>Points</span>
         </button>
         <button
           onClick={() => setActiveTab('picker')}
-          className={`py-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+          className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
             activeTab === 'picker'
               ? 'bg-yellow-400 text-slate-950 shadow-sm'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Shuffle className="w-4 h-4" />
-          <span>Session Picker</span>
+          <Shuffle className="w-3.5 h-3.5" />
+          <span>Picker</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('feedback')}
+          className={`py-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
+            activeTab === 'feedback'
+              ? 'bg-yellow-400 text-slate-950 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <MessageSquareHeart className="w-3.5 h-3.5" />
+          <span>Feedback</span>
         </button>
       </div>
 
@@ -552,6 +569,60 @@ export default function AdminPage() {
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* --- TAB 3: ADMIN FEEDBACK & MODERATION --- */}
+      {activeTab === 'feedback' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <MessageSquareHeart className="w-4 h-4 text-amber-400" />
+              <span>All Peer Feedback ({feedbackList.length})</span>
+            </h2>
+            <button
+              onClick={loadMembers}
+              className="text-[11px] text-yellow-400 hover:underline"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {feedbackList.length === 0 ? (
+            <div className="text-center py-10 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
+              No feedback submitted yet.
+            </div>
+          ) : (
+            feedbackList.map((item) => (
+              <div
+                key={item.id}
+                className={`p-3 rounded-2xl border space-y-2 ${
+                  item.flagged
+                    ? 'bg-rose-500/10 border-rose-500/50'
+                    : 'bg-slate-800/60 border-slate-700/80'
+                }`}
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-amber-400">{item.fromMemberName}</span>
+                    <span className="text-slate-400"> → </span>
+                    <span className="font-bold text-white">{item.toMemberName}</span>
+                  </div>
+                  {item.flagged && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center gap-1">
+                      <Flag className="w-3 h-3" /> Flagged
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-[11px] space-y-1 text-slate-300">
+                  <p><strong className="text-amber-400">⭐ Star 1:</strong> {item.star1}</p>
+                  <p><strong className="text-amber-400">⭐ Star 2:</strong> {item.star2}</p>
+                  <p><strong className="text-sky-400">✨ Wish:</strong> {item.wish}</p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>

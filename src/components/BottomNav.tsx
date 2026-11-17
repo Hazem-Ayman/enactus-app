@@ -2,15 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Trophy, BookOpen, Shield } from 'lucide-react';
+import { Home, Trophy, MessageSquareHeart, BookOpen, Shield } from 'lucide-react';
 
 export default function BottomNav() {
   const pathname = usePathname();
 
   const navItems = [
     { name: 'Home', href: '/', icon: Home },
+    { name: 'Feedback', href: '/feedback', icon: MessageSquareHeart },
     { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
-    { name: 'Guidelines', href: '/guidelines', icon: BookOpen },
+    { name: 'Guide', href: '/guidelines', icon: BookOpen },
     { name: 'Admin', href: '/admin', icon: Shield },
   ];
 
