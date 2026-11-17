@@ -259,10 +259,10 @@ export default function HomePage() {
           E
         </div>
         <h1 className="text-xl font-black text-white tracking-tight">
-          Enactus AU Beta
+          Enactus AU Presentations
         </h1>
         <p className="text-xs text-slate-400 max-w-xs mx-auto">
-          Presentations & Social Media Design education platform
+          Presentations Committee Beta Platform
         </p>
       </div>
 
@@ -335,16 +335,13 @@ export default function HomePage() {
             />
           </div>
 
+          {/* Committee - Preset to Presentations */}
           <div className="space-y-1">
-            <label className="text-xs text-slate-300 font-semibold">Committee *</label>
-            <select
-              value={committee}
-              onChange={(e) => setCommittee(e.target.value as Committee)}
-              className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
-            >
-              <option value="Presentations">Presentations</option>
-              <option value="Social Media Design">Social Media Design</option>
-            </select>
+            <label className="text-xs text-slate-300 font-semibold">Committee</label>
+            <div className="w-full px-3.5 py-2.5 bg-slate-900/60 border border-slate-700/80 rounded-xl text-xs text-yellow-400 font-semibold flex items-center justify-between">
+              <span>Presentations Committee</span>
+              <span className="text-[10px] bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">Beta</span>
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -376,7 +373,7 @@ export default function HomePage() {
             <textarea
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
-              placeholder="e.g. Public speaking confidence, typography, Photoshop workflow..."
+              placeholder="e.g. Public speaking confidence, stage presence, speech structuring..."
               rows={2}
               className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-2 focus:ring-yellow-400"
             />

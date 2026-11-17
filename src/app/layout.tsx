@@ -6,8 +6,8 @@ import BottomNav from '@/components/BottomNav';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Enactus AU Beta',
-  description: 'Shared platform for Presentations & Social Media Design beta members',
+  title: 'Enactus AU Presentations',
+  description: 'Beta education & points platform for Presentations Committee members',
   manifest: '/manifest.json',
 };
 

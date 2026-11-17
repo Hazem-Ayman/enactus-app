@@ -47,7 +47,6 @@ export default function AdminPage() {
   // Picker State
   const [presentMemberIds, setPresentMemberIds] = useState<Set<string>>(new Set());
   const [pickerSearch, setPickerSearch] = useState('');
-  const [pickerFilter, setPickerFilter] = useState<'All' | Committee>('All');
   
   // Random Picker Single Result
   const [isSpinning, setIsSpinning] = useState(false);
@@ -154,9 +153,7 @@ export default function AdminPage() {
   };
 
   const filteredPickerMembers = members.filter((m) => {
-    const matchName = m.name.toLowerCase().includes(pickerSearch.toLowerCase());
-    const matchFilter = pickerFilter === 'All' ? true : m.committee === pickerFilter;
-    return matchName && matchFilter;
+    return m.name.toLowerCase().includes(pickerSearch.toLowerCase());
   });
 
   const presentMembersList = members.filter((m) => presentMemberIds.has(m.id));
@@ -516,7 +513,7 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Filter & Search */}
+            {/* Search Filter */}
             <div className="space-y-2">
               <input
                 type="text"
@@ -525,22 +522,6 @@ export default function AdminPage() {
                 onChange={(e) => setPickerSearch(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white"
               />
-
-              <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-xl text-[10px] font-medium">
-                {(['All', 'Presentations', 'Social Media Design'] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => setPickerFilter(filter)}
-                    className={`py-1.5 rounded-lg text-center truncate ${
-                      pickerFilter === filter
-                        ? 'bg-yellow-400 text-slate-950 font-bold'
-                        : 'text-slate-400'
-                    }`}
-                  >
-                    {filter === 'Social Media Design' ? 'Design' : filter}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Members Checklist */}

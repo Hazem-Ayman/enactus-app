@@ -1,4 +1,4 @@
-export type Committee = 'Presentations' | 'Social Media Design';
+export type Committee = 'Presentations';
 
 export interface Member {
   id: string;

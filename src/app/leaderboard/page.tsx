@@ -4,11 +4,10 @@ import { useState, useEffect } from 'react';
 import { getAllMembers } from '@/lib/firestore';
 import { Member, Committee } from '@/types';
 import Avatar from '@/components/Avatar';
-import { Trophy, RefreshCw, Filter, Sparkles } from 'lucide-react';
+import { Trophy, RefreshCw } from 'lucide-react';
 
 export default function LeaderboardPage() {
   const [members, setMembers] = useState<Member[]>([]);
-  const [selectedCommittee, setSelectedCommittee] = useState<'All' | Committee>('All');
   const [currentMemberId, setCurrentMemberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -45,11 +44,6 @@ export default function LeaderboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const filteredMembers = members.filter((m) => {
-    if (selectedCommittee === 'All') return true;
-    return m.committee === selectedCommittee;
-  });
-
   return (
     <div className="space-y-4 pb-4">
       {/* Header */}
@@ -59,7 +53,7 @@ export default function LeaderboardPage() {
             <Trophy className="w-5 h-5 text-yellow-400" />
             Leaderboard
           </h1>
-          <p className="text-xs text-slate-400">Live points across beta committees</p>
+          <p className="text-xs text-slate-400">Presentations Committee live standings</p>
         </div>
 
         <button
@@ -72,35 +66,18 @@ export default function LeaderboardPage() {
         </button>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="grid grid-cols-3 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-medium">
-        {(['All', 'Presentations', 'Social Media Design'] as const).map((filter) => (
-          <button
-            key={filter}
-            onClick={() => setSelectedCommittee(filter)}
-            className={`py-2 px-1 text-center rounded-lg transition-all truncate text-[11px] ${
-              selectedCommittee === filter
-                ? 'bg-yellow-500 text-slate-950 font-bold shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            {filter === 'Social Media Design' ? 'Design' : filter}
-          </button>
-        ))}
-      </div>
-
       {/* Leaderboard List */}
       <div className="space-y-2 mt-2">
         {loading && members.length === 0 ? (
           <div className="text-center py-12 text-slate-400 text-xs">
             Loading ranks...
           </div>
-        ) : filteredMembers.length === 0 ? (
+        ) : members.length === 0 ? (
           <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-800 text-slate-400 text-xs">
-            No members found in this committee yet.
+            No members registered yet.
           </div>
         ) : (
-          filteredMembers.map((member, index) => {
+          members.map((member, index) => {
             const rank = index + 1;
             const isCurrent = member.id === currentMemberId;
 
