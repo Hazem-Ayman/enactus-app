@@ -13,7 +13,8 @@ import {
   markAttendance,
   saveSessionGroups,
   getGuidelinesContent,
-  updateGuidelinesContent 
+  updateGuidelinesContent,
+  deleteGuidelinesContent 
 } from '@/lib/firestore';
 import { Member, Committee, Feedback, SessionFeedback, Session } from '@/types';
 import BotAvatar from '@/components/BotAvatar';
@@ -36,7 +37,8 @@ import {
   Flame, 
   CheckCircle2,
   BookOpen,
-  Save
+  Save,
+  Trash2
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -148,6 +150,26 @@ export default function AdminPage() {
       setTimeout(() => setGuidelinesMsg(''), 4000);
     } catch (err: any) {
       alert('Error saving guidelines: ' + err.message);
+    } finally {
+      setGuidelinesSaving(false);
+    }
+  };
+
+  // Delete custom guidelines from Firestore
+  const handleDeleteGuidelines = async () => {
+    const confirmDelete = window.confirm(
+      'Are you sure you want to delete your custom guidelines? The page will revert to standard guidelines.'
+    );
+    if (!confirmDelete) return;
+
+    setGuidelinesSaving(true);
+    try {
+      await deleteGuidelinesContent();
+      setGuidelinesText('');
+      setGuidelinesMsg('Custom guidelines deleted successfully!');
+      setTimeout(() => setGuidelinesMsg(''), 4000);
+    } catch (err: any) {
+      alert('Error deleting guidelines: ' + err.message);
     } finally {
       setGuidelinesSaving(false);
     }
@@ -1005,14 +1027,28 @@ export default function AdminPage() {
             className="w-full px-3.5 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-yellow-400"
           />
 
-          <button
-            type="submit"
-            disabled={guidelinesSaving}
-            className="w-full py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
-          >
-            <Save className="w-4 h-4" />
-            <span>{guidelinesSaving ? 'Saving Changes...' : 'Save & Publish Guidelines Live'}</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={guidelinesSaving}
+              className="flex-1 py-3 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+            >
+              <Save className="w-4 h-4" />
+              <span>{guidelinesSaving ? 'Saving Changes...' : 'Save & Publish Live'}</span>
+            </button>
+
+            {guidelinesText && (
+              <button
+                type="button"
+                onClick={handleDeleteGuidelines}
+                disabled={guidelinesSaving}
+                className="px-4 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            )}
+          </div>
         </form>
       )}
     </div>

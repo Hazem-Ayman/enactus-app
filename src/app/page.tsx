@@ -549,25 +549,6 @@ export default function HomePage() {
 
         {/* Quick Action Navigation */}
         <div className="space-y-2">
-          {/* Priority 4: Buddy System Button */}
-          <button
-            onClick={() => setShowBuddyModal(true)}
-            className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-slate-800 border border-emerald-500/40 rounded-2xl transition-all group text-left"
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-emerald-400/20 text-emerald-400">
-                <Users className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">
-                  Presentation Buddies ({buddyList.length})
-                </h3>
-                <p className="text-[11px] text-slate-400">Scan ID to connect & earn +15 pts each 🤝</p>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-emerald-400 transition-transform group-hover:translate-x-1" />
-          </button>
-
           <Link
             href="/feedback"
             className="flex items-center justify-between p-4 bg-slate-800/70 hover:bg-slate-800 border border-slate-700/70 rounded-2xl transition-all group"

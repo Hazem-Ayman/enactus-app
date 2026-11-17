@@ -266,7 +266,7 @@ export async function getLatestSavedGroups(): Promise<SavedGroup | null> {
   return { id: snap.id, ...snap.data() } as SavedGroup;
 }
 
-// --- Priority 4: Editable Guidelines ---
+// --- Priority 4: Editable & Deletable Guidelines ---
 
 export async function getGuidelinesContent(): Promise<string | null> {
   const docRef = doc(db, 'settings', 'guidelines');
@@ -282,6 +282,12 @@ export async function updateGuidelinesContent(content: string): Promise<void> {
     content,
     updatedAt: Date.now(),
   });
+}
+
+export async function deleteGuidelinesContent(): Promise<void> {
+  const docRef = doc(db, 'settings', 'guidelines');
+  const { deleteDoc } = await import('firebase/firestore');
+  await deleteDoc(docRef);
 }
 
 // --- Priority 4: Buddy System via Code / QR ---
