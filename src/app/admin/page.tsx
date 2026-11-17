@@ -468,19 +468,12 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-4 pb-6">
-      {/* Top Header with Logout */}
+      {/* Top Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-yellow-400" />
           <span className="font-bold text-sm text-white">Admin Dashboard</span>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-slate-400 hover:text-rose-400 text-xs flex items-center gap-1"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Exit</span>
-        </button>
       </div>
 
       {/* Admin Nav Tabs */}
