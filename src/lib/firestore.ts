@@ -456,6 +456,18 @@ export async function flagFeedback(feedbackId: string, flagged: boolean = true):
   await updateDoc(ref, { flagged });
 }
 
+export async function deleteFeedbackItem(feedbackId: string): Promise<void> {
+  const ref = doc(db, 'feedback', feedbackId);
+  const { deleteDoc } = await import('firebase/firestore');
+  await deleteDoc(ref);
+}
+
+export async function deleteSessionFeedbackItem(feedbackId: string): Promise<void> {
+  const ref = doc(db, 'session_feedback', feedbackId);
+  const { deleteDoc } = await import('firebase/firestore');
+  await deleteDoc(ref);
+}
+
 // --- Session & Coordinator Evaluation API ---
 
 export async function submitSessionFeedback(data: {

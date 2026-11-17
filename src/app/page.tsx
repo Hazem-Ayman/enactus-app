@@ -380,12 +380,6 @@ export default function HomePage() {
               <Users className="w-4 h-4 text-yellow-400" />
               <span>Registered Members ({allMembers.filter(m => m.id !== 'ENC-2302').length})</span>
             </h3>
-            <Link 
-              href="/admin" 
-              className="px-2.5 py-1 bg-yellow-400 text-slate-950 font-black rounded-lg text-xs hover:bg-yellow-300 transition-colors"
-            >
-              Open Members & CSV Tools →
-            </Link>
           </div>
 
           <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">

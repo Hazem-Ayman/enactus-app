@@ -6,10 +6,15 @@ import {
   submitFeedback, 
   getReceivedFeedback, 
   flagFeedback,
-  submitSessionFeedback
+  submitSessionFeedback,
+  getAllFeedbackForAdmin,
+  getAllSessionFeedback,
+  deleteFeedbackItem,
+  deleteSessionFeedbackItem
 } from '@/lib/firestore';
-import { Member, Feedback } from '@/types';
+import { Member, Feedback, SessionFeedback } from '@/types';
 import Avatar from '@/components/Avatar';
+import BotAvatar from '@/components/BotAvatar';
 import confetti from 'canvas-confetti';
 import { 
   Star, 
@@ -22,12 +27,19 @@ import {
   MessageSquareHeart,
   Presentation,
   ShieldCheck,
-  EyeOff
+  EyeOff,
+  Trash2,
+  Users
 } from 'lucide-react';
 
 export default function FeedbackPage() {
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
-  const [activeTab, setActiveTab] = useState<'peer' | 'inbox' | 'session'>('peer');
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Tabs for regular members: 'peer' | 'session' | 'inbox'
+  // Tabs for coordinator admin: 'all-peer' | 'all-session'
+  const [activeTab, setActiveTab] = useState<'peer' | 'session' | 'inbox'>('peer');
+  const [adminTab, setAdminTab] = useState<'all-peer' | 'all-session'>('all-peer');
 
   // Members list for giving peer feedback
   const [members, setMembers] = useState<Member[]>([]);
@@ -36,11 +48,16 @@ export default function FeedbackPage() {
   const [star2, setStar2] = useState('');
   const [wish, setWish] = useState('');
 
-  // Inbox list for received peer feedback
+  // Inbox list for received peer feedback (members)
   const [inboxList, setInboxList] = useState<Feedback[]>([]);
   const [loadingInbox, setLoadingInbox] = useState(false);
 
-  // Session & Coordinator Evaluation Form State
+  // Admin Oversight Lists
+  const [allFeedbackList, setAllFeedbackList] = useState<Feedback[]>([]);
+  const [allSessionFeedbackList, setAllSessionFeedbackList] = useState<SessionFeedback[]>([]);
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
+
+  // Session & Coordinator Evaluation Form State (members)
   const [sessionRating, setSessionRating] = useState<number>(5);
   const [coordinatorRating, setCoordinatorRating] = useState<number>(5);
   const [keyTakeaway, setKeyTakeaway] = useState('');
@@ -52,13 +69,17 @@ export default function FeedbackPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Load current member from localStorage
+  // Load current member
   useEffect(() => {
     const saved = localStorage.getItem('enactus_member');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         setCurrentMember(parsed);
+        if (parsed.id === 'ENC-2302' || parsed.role === 'admin') {
+          setIsAdmin(true);
+          loadAdminFeed();
+        }
       } catch (e) {
         console.error(e);
       }
@@ -75,6 +96,22 @@ export default function FeedbackPage() {
     }
   };
 
+  const loadAdminFeed = async () => {
+    setLoadingAdmin(true);
+    try {
+      const [peerList, sessionList] = await Promise.all([
+        getAllFeedbackForAdmin(),
+        getAllSessionFeedback(),
+      ]);
+      setAllFeedbackList(peerList);
+      setAllSessionFeedbackList(sessionList);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingAdmin(false);
+    }
+  };
+
   const loadInbox = async (memberId: string) => {
     setLoadingInbox(true);
     try {
@@ -87,7 +124,7 @@ export default function FeedbackPage() {
     }
   };
 
-  const handleTabChange = (tab: 'peer' | 'inbox' | 'session') => {
+  const handleTabChange = (tab: 'peer' | 'session' | 'inbox') => {
     setActiveTab(tab);
     setErrorMsg('');
     setSuccessMsg('');
@@ -96,7 +133,7 @@ export default function FeedbackPage() {
     }
   };
 
-  // Submit Peer Feedback
+  // Submit Peer Feedback (Member only)
   const handlePeerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentMember) {
@@ -144,7 +181,7 @@ export default function FeedbackPage() {
     }
   };
 
-  // Submit Session & Coordinator Feedback
+  // Submit Session Evaluation (Member only)
   const handleSessionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyTakeaway.trim() || !improvementWish.trim()) {
@@ -181,6 +218,30 @@ export default function FeedbackPage() {
     }
   };
 
+  // Admin Actions: Delete inappropriate peer feedback
+  const handleDeletePeerFeedback = async (id: string) => {
+    const confirmDelete = window.confirm('Delete this feedback entry permanently?');
+    if (!confirmDelete) return;
+    try {
+      await deleteFeedbackItem(id);
+      setAllFeedbackList((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteSessionFeedback = async (id: string) => {
+    const confirmDelete = window.confirm('Delete this session evaluation entry permanently?');
+    if (!confirmDelete) return;
+    try {
+      await deleteSessionFeedbackItem(id);
+      setAllSessionFeedbackList((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Member Action: Flag feedback
   const handleFlag = async (item: Feedback) => {
     const confirmFlag = window.confirm(
       'Flag this feedback for coordinator review? Coordinators will inspect it.'
@@ -198,6 +259,184 @@ export default function FeedbackPage() {
     }
   };
 
+  // ==========================================
+  // VIEW A: COORDINATOR ADMIN FEEDBACK VIEW
+  // ==========================================
+  if (isAdmin) {
+    return (
+      <div className="space-y-4 pb-6">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-yellow-400" />
+            <div>
+              <h1 className="text-base font-bold text-white">Feedback Moderation Portal</h1>
+              <p className="text-[10px] text-slate-400">Coordinator live oversight • Delete inappropriate entries</p>
+            </div>
+          </div>
+          <button
+            onClick={loadAdminFeed}
+            className="text-xs text-yellow-400 hover:underline"
+          >
+            Refresh Feed
+          </button>
+        </div>
+
+        {/* 2 Coordinator Oversight Tabs */}
+        <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+          <button
+            onClick={() => setAdminTab('all-peer')}
+            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              adminTab === 'all-peer'
+                ? 'bg-yellow-400 text-slate-950 font-bold shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <MessageSquareHeart className="w-4 h-4" />
+            <span>Peer Critiques ({allFeedbackList.length})</span>
+          </button>
+
+          <button
+            onClick={() => setAdminTab('all-session')}
+            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              adminTab === 'all-session'
+                ? 'bg-yellow-400 text-slate-950 font-bold shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Presentation className="w-4 h-4" />
+            <span>Session & Lead ({allSessionFeedbackList.length})</span>
+          </button>
+        </div>
+
+        {/* SUBTAB 1: ALL PEER FEEDBACK */}
+        {adminTab === 'all-peer' && (
+          <div className="space-y-2.5">
+            {loadingAdmin ? (
+              <p className="text-center py-8 text-xs text-slate-400">Loading peer critiques...</p>
+            ) : allFeedbackList.length === 0 ? (
+              <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
+                No peer feedback submitted yet.
+              </div>
+            ) : (
+              allFeedbackList.map((item) => (
+                <div
+                  key={item.id}
+                  className={`p-3.5 rounded-2xl border space-y-2.5 transition-all ${
+                    item.flagged
+                      ? 'bg-rose-500/10 border-rose-500/50 shadow-md ring-1 ring-rose-500/30'
+                      : 'bg-slate-800/60 border-slate-700/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between text-xs border-b border-slate-700/50 pb-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-bold text-amber-400">{item.fromMemberName}</span>
+                      <span className="text-slate-500">→</span>
+                      <span className="font-bold text-white">{item.toMemberName}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {item.flagged && (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-rose-500 text-white flex items-center gap-1">
+                          <Flag className="w-3 h-3 fill-white" /> FLAGGED
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleDeletePeerFeedback(item.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700"
+                        title="Delete this feedback"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] space-y-1.5 text-slate-300">
+                    <p className="bg-amber-500/10 p-2 rounded-xl border border-amber-500/20">
+                      <strong className="text-amber-400 block mb-0.5">⭐ Star 1:</strong>
+                      {item.star1}
+                    </p>
+                    <p className="bg-amber-500/10 p-2 rounded-xl border border-amber-500/20">
+                      <strong className="text-amber-400 block mb-0.5">⭐ Star 2:</strong>
+                      {item.star2}
+                    </p>
+                    <p className="bg-sky-500/10 p-2 rounded-xl border border-sky-500/20">
+                      <strong className="text-sky-400 block mb-0.5">✨ Wish:</strong>
+                      {item.wish}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* SUBTAB 2: ALL SESSION & COORDINATOR EVALUATIONS */}
+        {adminTab === 'all-session' && (
+          <div className="space-y-2.5">
+            {loadingAdmin ? (
+              <p className="text-center py-8 text-xs text-slate-400">Loading evaluations...</p>
+            ) : allSessionFeedbackList.length === 0 ? (
+              <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
+                No session evaluations submitted yet.
+              </div>
+            ) : (
+              allSessionFeedbackList.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-3.5 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-2.5"
+                >
+                  <div className="flex items-center justify-between text-xs border-b border-slate-700/50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white">
+                        {item.isAnonymous ? '🕵️ Anonymous Member' : item.memberName}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {new Date(item.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-2 text-[10px]">
+                        <span className="text-amber-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                          Session: {item.sessionRating}★
+                        </span>
+                        <span className="text-yellow-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                          Lead: {item.coordinatorRating}★
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteSessionFeedback(item.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700"
+                        title="Delete evaluation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] space-y-1.5 text-slate-300">
+                    <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
+                      <strong className="text-emerald-400 block mb-0.5">Most Helpful / Liked:</strong>
+                      {item.keyTakeaway}
+                    </div>
+                    <div className="bg-sky-500/10 p-2 rounded-xl border border-sky-500/20">
+                      <strong className="text-sky-400 block mb-0.5">Suggestion / Improvement Wish:</strong>
+                      {item.improvementWish}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VIEW B: REGULAR MEMBER FEEDBACK VIEW
+  // ==========================================
   return (
     <div className="space-y-4 pb-6">
       {/* Header */}
@@ -207,11 +446,11 @@ export default function FeedbackPage() {
           Feedback Center
         </h1>
         <p className="text-xs text-slate-400">
-          Peer critique & session evaluations for continuous improvement
+          Peer critique & session evaluations • Earn +5 pts for feedback
         </p>
       </div>
 
-      {/* 3 Tabs in the Pill Bar */}
+      {/* 3 Tabs in the Pill Bar for Members */}
       <div className="grid grid-cols-3 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => handleTabChange('peer')}
@@ -280,7 +519,7 @@ export default function FeedbackPage() {
             >
               <option value="">-- Choose a presenter --</option>
               {members
-                .filter((m) => m.id !== currentMember?.id)
+                .filter((m) => m.id !== currentMember?.id && m.id !== 'ENC-2302')
                 .map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
@@ -358,7 +597,7 @@ export default function FeedbackPage() {
             </p>
           </div>
 
-          {/* Session Rating (1-5 Stars) */}
+          {/* Session Rating */}
           <div className="space-y-1">
             <div className="flex justify-between items-center">
               <label className="text-xs text-slate-300 font-semibold">Session Value & Content</label>
@@ -382,7 +621,7 @@ export default function FeedbackPage() {
             </div>
           </div>
 
-          {/* Coordinator Rating (1-5 Stars) */}
+          {/* Coordinator Rating */}
           <div className="space-y-1">
             <div className="flex justify-between items-center">
               <label className="text-xs text-slate-300 font-semibold">Coordinator Facilitation & Support</label>
@@ -406,7 +645,6 @@ export default function FeedbackPage() {
             </div>
           </div>
 
-          {/* What went well */}
           <div className="space-y-1">
             <label className="text-xs text-emerald-400 font-semibold">
               What was most helpful or engaging about today? *
@@ -421,7 +659,6 @@ export default function FeedbackPage() {
             />
           </div>
 
-          {/* What could improve */}
           <div className="space-y-1">
             <label className="text-xs text-sky-400 font-semibold">
               What can the coordinator improve next time? *
@@ -503,7 +740,6 @@ export default function FeedbackPage() {
                 key={item.id}
                 className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3 relative"
               >
-                {/* Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Avatar name={item.fromMemberName} size="sm" />
@@ -520,7 +756,6 @@ export default function FeedbackPage() {
                     </div>
                   </div>
 
-                  {/* Flag Button */}
                   <button
                     onClick={() => handleFlag(item)}
                     disabled={item.flagged}
@@ -538,7 +773,6 @@ export default function FeedbackPage() {
                   </button>
                 </div>
 
-                {/* Stars Content */}
                 <div className="space-y-1.5 pt-1">
                   <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
                     <span className="text-amber-400 font-bold block text-[11px] mb-1">
