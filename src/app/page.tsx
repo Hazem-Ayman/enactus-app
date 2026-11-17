@@ -16,6 +16,7 @@ import {
 import { Member, AvatarConfig, PointEvent, SavedGroup } from '@/types';
 import BotAvatar from '@/components/BotAvatar';
 import AvatarCustomizer from '@/components/AvatarCustomizer';
+import AdminContent from '@/components/AdminContent';
 import confetti from 'canvas-confetti';
 import {
   Trophy,
@@ -295,7 +296,7 @@ export default function HomePage() {
         </div>
 
         {/* Coordinator Hero Banner */}
-        <div className="p-5 bg-gradient-to-br from-yellow-500/20 via-amber-600/10 to-slate-900 border-2 border-yellow-400/40 rounded-3xl space-y-3 shadow-xl">
+        <div className="p-5 bg-gradient-to-br from-yellow-500/20 via-amber-600/10 to-slate-900 border-2 border-yellow-400/40 rounded-3xl space-y-2 shadow-xl">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-yellow-400 text-slate-950 rounded-2xl shadow-md">
               <Shield className="w-6 h-6" />
@@ -306,115 +307,12 @@ export default function HomePage() {
             </div>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Welcome Hazem! From here you run live presentation sessions, review all peer & coordinator feedback, assign attendance streaks, and manage guidelines.
+            Manage points, sessions, streaks, members & guidelines directly below:
           </p>
         </div>
 
-        {/* 4 Direct Coordinator Action Tiles */}
-        <div className="grid grid-cols-2 gap-3">
-          <Link
-            href="/admin"
-            className="p-4 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl flex flex-col items-start gap-2 group transition-all"
-          >
-            <div className="p-2.5 rounded-xl bg-yellow-400/10 text-yellow-400 group-hover:bg-yellow-400 group-hover:text-slate-950 transition-colors">
-              <Award className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-white group-hover:text-yellow-400 transition-colors">
-                Manual Points
-              </h3>
-              <p className="text-[10px] text-slate-400">Award or deduct live session points</p>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin"
-            className="p-4 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl flex flex-col items-start gap-2 group transition-all"
-          >
-            <div className="p-2.5 rounded-xl bg-emerald-400/10 text-emerald-400 group-hover:bg-emerald-400 group-hover:text-slate-950 transition-colors">
-              <CalendarCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">
-                Sessions & Streaks
-              </h3>
-              <p className="text-[10px] text-slate-400">Mark attendance & fire bonuses</p>
-            </div>
-          </Link>
-
-          <Link
-            href="/feedback"
-            className="p-4 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl flex flex-col items-start gap-2 group transition-all"
-          >
-            <div className="p-2.5 rounded-xl bg-amber-400/10 text-amber-400 group-hover:bg-amber-400 group-hover:text-slate-950 transition-colors">
-              <MessageSquareHeart className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">
-                Feedback Moderation
-              </h3>
-              <p className="text-[10px] text-slate-400">Read all peer & coordinator feedback</p>
-            </div>
-          </Link>
-
-          <Link
-            href="/leaderboard"
-            className="p-4 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl flex flex-col items-start gap-2 group transition-all"
-          >
-            <div className="p-2.5 rounded-xl bg-cyan-400/10 text-cyan-400 group-hover:bg-cyan-400 group-hover:text-slate-950 transition-colors">
-              <Trophy className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors">
-                Live Leaderboard
-              </h3>
-              <p className="text-[10px] text-slate-400">Inspect rankings, IDs & streaks</p>
-            </div>
-          </Link>
-        </div>
-
-        {/* Member Directory Overview */}
-        <div className="bg-slate-800/50 border border-slate-700/70 rounded-2xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-yellow-400" />
-              <span>Registered Members ({allMembers.filter(m => m.id !== 'ENC-2302').length})</span>
-            </h3>
-            <Link
-              href="/admin"
-              className="px-2.5 py-1 bg-yellow-400 text-slate-950 font-black rounded-lg text-xs hover:bg-yellow-300 transition-colors"
-            >
-              Open Members & CSV Tools →
-            </Link>
-          </div>
-
-          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-            {allMembers
-              .filter(m => m.id !== 'ENC-2302')
-              .map(m => (
-                <div key={m.id} className="p-2.5 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <BotAvatar config={m.avatar} size="sm" />
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-white block">{m.name}</span>
-                        {m.titleBadge && (
-                          <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full">
-                            🎖️ {m.titleBadge}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-yellow-400 font-mono">ID: {m.id}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-bold text-yellow-400">{m.totalPoints || 0} pts</span>
-                    <span className="text-[10px] text-slate-500 block">Streak: 🔥 {m.streak || 0}</span>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
+        {/* Live Integrated Admin Dashboard directly on Home */}
+        <AdminContent />
       </div>
     );
   }
