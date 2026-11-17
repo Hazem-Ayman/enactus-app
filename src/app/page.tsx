@@ -380,8 +380,11 @@ export default function HomePage() {
               <Users className="w-4 h-4 text-yellow-400" />
               <span>Registered Members ({allMembers.filter(m => m.id !== 'ENC-2302').length})</span>
             </h3>
-            <Link href="/admin" className="text-[11px] text-yellow-400 hover:underline">
-              Full Admin Tools →
+            <Link 
+              href="/admin" 
+              className="px-2.5 py-1 bg-yellow-400 text-slate-950 font-black rounded-lg text-xs hover:bg-yellow-300 transition-colors"
+            >
+              Open Members & CSV Tools →
             </Link>
           </div>
 
@@ -389,11 +392,18 @@ export default function HomePage() {
             {allMembers
               .filter(m => m.id !== 'ENC-2302')
               .map(m => (
-                <div key={m.id} className="p-2 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
+                <div key={m.id} className="p-2.5 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <BotAvatar config={m.avatar} size="sm" />
                     <div>
-                      <span className="font-bold text-white block">{m.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-white block">{m.name}</span>
+                        {m.titleBadge && (
+                          <span className="px-1.5 py-0.5 text-[8px] font-bold bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-full">
+                            🎖️ {m.titleBadge}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-yellow-400 font-mono">ID: {m.id}</span>
                     </div>
                   </div>
