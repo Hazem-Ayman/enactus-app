@@ -25,6 +25,7 @@ import {
   Swords, 
   Trophy, 
   Eye, 
+  EyeOff, 
   Vote, 
   ThumbsUp, 
   Star, 
@@ -160,6 +161,7 @@ const DEBATE_CHALLENGES = [
 export default function GamesPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentMemberId, setCurrentMemberId] = useState<string>('');
+  const [currentMemberName, setCurrentMemberName] = useState<string>('');
   const [members, setMembers] = useState<Member[]>([]);
 
   // Coordinator Game Control State
@@ -213,6 +215,7 @@ export default function GamesPage() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.id) setCurrentMemberId(parsed.id);
+        if (parsed.name) setCurrentMemberName(parsed.name);
         if (parsed.id === 'ENC-2302' || parsed.role === 'admin') {
           setIsAdmin(true);
         }
@@ -577,6 +580,12 @@ export default function GamesPage() {
   const effectiveIsFinished = isAdmin ? isFinished : (liveState?.isFinished ?? false);
   const effectiveBombExploded = isAdmin ? bombExploded : (liveState?.bombExploded ?? false);
   const effectiveDebateTurn = isAdmin ? debateTurn : (liveState?.debateTurn ?? 'A');
+
+  // Check if current user is the chosen Word Bomb speaker (secret traps must be hidden from them!)
+  const isWordBombSpeaker = !isAdmin && Boolean(effectiveSpeaker) && (
+    (Boolean(currentMemberId) && Boolean(effectiveSpeaker?.id) && currentMemberId.trim().toLowerCase() === (effectiveSpeaker?.id || '').trim().toLowerCase()) ||
+    (Boolean(currentMemberName) && Boolean(effectiveSpeaker?.name) && currentMemberName.trim().toLowerCase() === (effectiveSpeaker?.name || '').trim().toLowerCase())
+  );
 
   const progressPercent = effectiveDuration > 0 ? ((effectiveDuration - effectiveTimeLeft) / effectiveDuration) * 100 : 0;
   const isUrgent = effectiveTimeLeft <= 10 && effectiveTimeLeft > 0;
@@ -1041,23 +1050,75 @@ export default function GamesPage() {
         )}
 
         {effectiveGame === 'bomb' && effectiveBomb && (
-          <div className="space-y-2.5 bg-slate-900/90 p-3.5 rounded-2xl border border-rose-500/40">
+          <div className="space-y-3 bg-slate-900/90 p-4 rounded-2xl border border-rose-500/40 shadow-lg">
             <div>
               <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Speech Topic (45s):</span>
               <h3 className="text-sm font-black text-white">&quot;{effectiveBomb.topic}&quot;</h3>
             </div>
-            <div className="pt-1 border-t border-slate-800">
-              <span className="text-[10px] text-rose-400 font-black uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                <Bomb className="w-3.5 h-3.5" />
-                <span>FORBIDDEN TRAP WORDS:</span>
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {effectiveBomb.banned.map((word, idx) => (
-                  <span key={idx} className="px-2.5 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-xl text-xs font-black uppercase">
-                    🚫 {word}
-                  </span>
-                ))}
-              </div>
+
+            <div className="pt-2 border-t border-slate-800">
+              {isWordBombSpeaker ? (
+                /* HIDDEN FROM THE ACTIVE SPEAKER ONLY */
+                <div className="p-3.5 bg-rose-950/40 border border-rose-500/60 rounded-2xl text-center space-y-2">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-full text-[11px] font-black uppercase">
+                    <EyeOff className="w-3.5 h-3.5" />
+                    <span>Secret Traps Hidden From You!</span>
+                  </div>
+                  <p className="text-xs text-rose-200/90 leading-relaxed font-medium">
+                    🙈 You are the Speaker! 3 secret trap words are hidden from your screen. Speak fluently without saying any of them!
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="p-2 bg-rose-900/50 border border-rose-700/60 rounded-xl text-center">
+                      <span className="text-[9px] text-rose-400 block font-bold">TRAP 1</span>
+                      <span className="text-xs font-mono font-black text-rose-200">🔒 [ ? ? ? ]</span>
+                    </div>
+                    <div className="p-2 bg-rose-900/50 border border-rose-700/60 rounded-xl text-center">
+                      <span className="text-[9px] text-rose-400 block font-bold">TRAP 2</span>
+                      <span className="text-xs font-mono font-black text-rose-200">🔒 [ ? ? ? ]</span>
+                    </div>
+                    <div className="p-2 bg-rose-900/50 border border-rose-700/60 rounded-xl text-center">
+                      <span className="text-[9px] text-rose-400 block font-bold">TRAP 3</span>
+                      <span className="text-xs font-mono font-black text-rose-200">🔒 [ ? ? ? ]</span>
+                    </div>
+                  </div>
+
+                  {effectiveBombExploded && (
+                    <div className="pt-2.5 mt-2 border-t border-rose-800/80">
+                      <span className="text-[10px] text-amber-300 font-bold uppercase tracking-wider block mb-1.5">
+                        💥 Secret Traps Revealed:
+                      </span>
+                      <div className="flex justify-center gap-1.5 flex-wrap">
+                        {effectiveBomb.banned.map((word, idx) => (
+                          <span key={idx} className="px-2.5 py-1 bg-rose-500/30 text-rose-100 border border-rose-500/60 rounded-xl text-xs font-black uppercase">
+                            💥 {word}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* VISIBLE TO AUDIENCE & COORDINATOR */
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-rose-400 font-black uppercase tracking-wider flex items-center gap-1">
+                      <Bomb className="w-3.5 h-3.5" />
+                      <span>FORBIDDEN TRAP WORDS:</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/60">
+                      <EyeOff className="w-3 h-3 text-rose-400" />
+                      <span>Hidden on {effectiveSpeaker?.name ? `${effectiveSpeaker.name}'s` : "Speaker's"} screen</span>
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {effectiveBomb.banned.map((word, idx) => (
+                      <span key={idx} className="px-3 py-1.5 bg-rose-500/20 text-rose-200 border border-rose-500/50 rounded-xl text-xs font-black uppercase tracking-wide shadow-sm">
+                        🚫 {word}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
