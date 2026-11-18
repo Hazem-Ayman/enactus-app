@@ -12,7 +12,7 @@ import {
   SectionToggles 
 } from '@/lib/firestore';
 import { Member } from '@/types';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import confetti from 'canvas-confetti';
 import { 
   PlusCircle, 
@@ -350,7 +350,7 @@ export default function AdminContent() {
               {selectedMember ? (
                 <div className="p-3 bg-yellow-400/10 border-2 border-yellow-400/80 rounded-2xl flex items-center justify-between shadow-sm">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <BotAvatar config={selectedMember.avatar} size="sm" />
+                    <DiceBearAvatar config={selectedMember.avatar} size="sm" />
                     <div className="min-w-0">
                       <span className="font-bold text-xs text-white block truncate">{selectedMember.name}</span>
                       <span className="text-[10px] text-yellow-300 font-mono">
@@ -395,7 +395,7 @@ export default function AdminContent() {
                           className="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 hover:bg-yellow-400/15 hover:border-yellow-400/50 border border-transparent cursor-pointer transition-all"
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <BotAvatar config={m.avatar} size="sm" />
+                            <DiceBearAvatar config={m.avatar} size="sm" />
                             <span className="text-xs font-bold text-white truncate">{m.name}</span>
                           </div>
                           <span className="text-[10px] text-slate-400 font-mono flex-shrink-0">
@@ -491,7 +491,7 @@ export default function AdminContent() {
                 🎉 Selected Participant (Broadcasted to All Screens)
               </span>
               <div className="flex items-center justify-center gap-3">
-                <BotAvatar config={selectedPickerMember.avatar} size="lg" />
+                <DiceBearAvatar config={selectedPickerMember.avatar} size="lg" />
                 <div className="text-left">
                   <h3 className="font-extrabold text-base text-white">
                     {selectedPickerMember.name}

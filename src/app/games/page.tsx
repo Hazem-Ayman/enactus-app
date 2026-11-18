@@ -41,7 +41,7 @@ import {
   LiveGameState 
 } from '@/lib/firestore';
 import { Member } from '@/types';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import confetti from 'canvas-confetti';
 
 type GameMode = 'hub' | 'impromptu' | 'hottake' | 'pitch' | 'emotion' | 'bomb' | 'debate';
@@ -938,7 +938,7 @@ export default function GamesPage() {
                 : 'bg-slate-900/80 border-slate-700/80'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <BotAvatar config={effectiveSpeaker?.avatar} size="sm" />
+                <DiceBearAvatar config={effectiveSpeaker?.avatar} size="sm" />
                 <div className="min-w-0">
                   <span className="text-[10px] text-emerald-400 font-black block">SIDE A (PRO)</span>
                   <span className="text-xs font-bold text-white truncate block">{effectiveSpeaker?.name || 'Speaker A'}</span>
@@ -952,7 +952,7 @@ export default function GamesPage() {
                 : 'bg-slate-900/80 border-slate-700/80'
             }`}>
               <div className="flex items-center gap-2 min-w-0">
-                <BotAvatar config={effectiveSpeakerB?.avatar} size="sm" />
+                <DiceBearAvatar config={effectiveSpeakerB?.avatar} size="sm" />
                 <div className="min-w-0">
                   <span className="text-[10px] text-sky-400 font-black block">SIDE B (CON)</span>
                   <span className="text-xs font-bold text-white truncate block">{effectiveSpeakerB?.name || 'Speaker B'}</span>
@@ -984,7 +984,7 @@ export default function GamesPage() {
           {effectiveSpeaker ? (
             <div className="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-700/80">
               <div className="flex items-center gap-3 min-w-0">
-                <BotAvatar config={effectiveSpeaker.avatar} size="sm" />
+                <DiceBearAvatar config={effectiveSpeaker.avatar} size="sm" />
                 <div className="min-w-0">
                   <h4 className="font-bold text-xs text-white truncate flex items-center gap-1.5">
                     <span>{effectiveSpeaker.name}</span>

@@ -13,7 +13,7 @@ import {
   getLatestSavedGroups
 } from '@/lib/firestore';
 import { Member, AvatarConfig, PointEvent, SavedGroup } from '@/types';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import AvatarCustomizer from '@/components/AvatarCustomizer';
 import AdminContent from '@/components/AdminContent';
 import confetti from 'canvas-confetti';
@@ -182,10 +182,13 @@ export default function HomePage() {
 
     try {
       const defaultAvatar: AvatarConfig = {
-        type: 'robot',
-        color: 'blue',
-        shape: 'rounded',
-        accessory: 'antenna',
+        style: 'bottts',
+        seed: name.trim() || 'Hero',
+        backgroundColor: ['06b6d4'],
+        radius: 50,
+        top: ['antenna'],
+        eyes: ['happy'],
+        mouth: ['smile01'],
       };
 
       const newMember = await createMember({
@@ -354,7 +357,7 @@ export default function HomePage() {
         <div className="bg-gradient-to-br from-slate-800 to-slate-800/60 border border-slate-700/80 rounded-3xl p-5 shadow-lg space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3.5">
-              <BotAvatar config={currentMember.avatar} size="lg" />
+              <DiceBearAvatar config={currentMember.avatar} size="lg" />
               <div>
                 <h1 className="text-lg font-bold text-white flex items-center gap-1.5">
                   {currentMember.name}
@@ -626,6 +629,10 @@ export default function HomePage() {
             memberId={newMemberCreated.id}
             initialConfig={newMemberCreated.avatar}
             onComplete={handleCompleteCustomization}
+            onClose={() => {
+              setShowCustomizer(false);
+              setNewMemberCreated(null);
+            }}
           />
         )}
       </div>
@@ -799,6 +806,10 @@ export default function HomePage() {
           memberId={newMemberCreated.id}
           initialConfig={newMemberCreated.avatar}
           onComplete={handleCompleteCustomization}
+          onClose={() => {
+            setShowCustomizer(false);
+            setNewMemberCreated(null);
+          }}
         />
       )}
     </div>

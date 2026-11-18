@@ -1,11 +1,22 @@
 export type Committee = 'Presentations';
 
+export type AvatarStyle = 'bottts' | 'adventurer' | 'funEmoji';
+
 export interface AvatarConfig {
-  type: 'robot' | 'human' | 'monster' | 'alien'; // Character Archetype
-  color: string; // e.g. 'blue', 'orange', 'pink', 'purple', 'green', 'red', 'yellow'
-  shape: 'circle' | 'square' | 'rounded'; // Head shape
-  accessory: 'none' | 'glasses' | 'sunglasses' | 'antenna' | 'horns' | 'vr' | 'heart_eyes' | 'cap' | 'crown' | 'mask'; // What to wear
-  expression?: 'smile' | 'cool' | 'wink' | 'open'; // Face expression
+  style: AvatarStyle;
+  seed: string;
+  backgroundColor?: string[];
+  radius?: number;
+  eyes?: string[];
+  mouth?: string[];
+  top?: string[];
+  sides?: string[];
+  baseColor?: string[];
+  hair?: string[];
+  hairColor?: string[];
+  glasses?: string[];
+  skinColor?: string[];
+  [key: string]: unknown;
 }
 
 export interface Member {

@@ -13,8 +13,7 @@ import {
   deleteSessionFeedbackItem
 } from '@/lib/firestore';
 import { Member, Feedback, SessionFeedback } from '@/types';
-import Avatar from '@/components/Avatar';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import confetti from 'canvas-confetti';
 import { 
   Star, 
@@ -748,7 +747,7 @@ export default function FeedbackPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Avatar name={item.fromMemberName} size="sm" />
+                    <DiceBearAvatar name={item.fromMemberName} size="sm" />
                     <div>
                       <span className="text-xs font-bold text-white block">
                         From: {item.fromMemberName}

@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getAllMembers } from '@/lib/firestore';
 import { Member, Committee } from '@/types';
-import Avatar from '@/components/Avatar';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import { Trophy, RefreshCw, Flame } from 'lucide-react';
 
 export default function LeaderboardPage() {
@@ -117,8 +116,8 @@ export default function LeaderboardPage() {
                   {rankBadge || <span className={rankColor}>#{rank}</span>}
                 </div>
 
-                {/* Bot Avatar Character */}
-                <BotAvatar config={member.avatar} name={member.name} size="md" />
+                {/* DiceBear Avatar Character */}
+                <DiceBearAvatar config={member.avatar} name={member.name} size="md" />
 
                 {/* Member Info */}
                 <div className="flex-1 min-w-0">

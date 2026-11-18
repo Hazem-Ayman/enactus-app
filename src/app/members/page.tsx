@@ -8,7 +8,7 @@ import {
   deleteMember 
 } from '@/lib/firestore';
 import { Member } from '@/types';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import { 
   Users, 
   ArrowLeft, 
@@ -234,7 +234,7 @@ export default function MembersPage() {
               className="p-3 bg-slate-800/60 border border-slate-700/80 rounded-2xl flex items-center justify-between gap-3 shadow-sm"
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <BotAvatar config={m.avatar} size="sm" />
+                <DiceBearAvatar config={m.avatar} size="sm" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-bold text-xs text-white truncate">{m.name}</span>

@@ -12,7 +12,7 @@ import {
   clearSessionAttendance
 } from '@/lib/firestore';
 import { Member, Session, AttendanceRecord } from '@/types';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import confetti from 'canvas-confetti';
 import { 
   CalendarCheck, 
@@ -475,7 +475,7 @@ export default function SessionsPage() {
                       className="p-2.5 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between gap-2"
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <BotAvatar config={m.avatar} size="sm" />
+                        <DiceBearAvatar config={m.avatar} size="sm" />
                         <div className="min-w-0">
                           <span className="text-xs font-bold text-white block truncate">{m.name}</span>
                           <span className="text-[10px] text-slate-400 font-mono">

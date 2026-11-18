@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import BotAvatar from '@/components/BotAvatar';
+import DiceBearAvatar from '@/components/DiceBearAvatar';
 import { Member } from '@/types';
 import { subscribeToLivePicker } from '@/lib/firestore';
 import confetti from 'canvas-confetti';
@@ -63,7 +63,7 @@ export default function LivePickerPopup() {
         {liveState.selectedMember ? (
           <div className="space-y-3 py-2">
             <div className={`flex justify-center ${liveState.isSpinning ? 'animate-bounce' : 'scale-110'} transition-transform`}>
-              <BotAvatar config={liveState.selectedMember.avatar} size="xl" />
+              <DiceBearAvatar config={liveState.selectedMember.avatar} size="xl" />
             </div>
 
             <div>
