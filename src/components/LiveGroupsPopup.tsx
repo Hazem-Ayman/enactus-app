@@ -53,6 +53,9 @@ export default function LiveGroupsPopup() {
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
       <div className="max-w-sm w-full bg-slate-900 border-2 border-indigo-500/80 rounded-3xl p-5 space-y-4 shadow-2xl relative max-h-[85vh] flex flex-col">
+        <div className="absolute top-3 left-3 p-1 rounded-lg bg-slate-800/80">
+          <img src="/enactus-icon.png" alt="Enactus" className="w-4 h-4 object-contain" />
+        </div>
         {/* Close Button */}
         <button
           onClick={() => setVisible(false)}

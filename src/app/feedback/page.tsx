@@ -267,10 +267,13 @@ export default function FeedbackPage() {
       <div className="space-y-4 pb-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-yellow-400" />
+          <div className="flex items-center gap-2.5">
+            <img src="/enactus-icon.png" alt="Enactus" className="w-6 h-6 object-contain" />
             <div>
-              <h1 className="text-base font-bold text-white">Feedback Moderation Portal</h1>
+              <h1 className="text-base font-bold text-white flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-yellow-400" />
+                <span>Feedback Moderation Portal</span>
+              </h1>
               <p className="text-[10px] text-slate-400">Coordinator live oversight • Delete inappropriate entries</p>
             </div>
           </div>
@@ -440,14 +443,17 @@ export default function FeedbackPage() {
   return (
     <div className="space-y-4 pb-6">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-white flex items-center gap-2">
-          <MessageSquareHeart className="w-5 h-5 text-amber-400" />
-          Feedback Center
-        </h1>
-        <p className="text-xs text-slate-400">
-          Peer critique & session evaluations • Earn +5 pts for feedback
-        </p>
+      <div className="flex items-center gap-3">
+        <img src="/enactus-icon.png" alt="Enactus" className="w-8 h-8 object-contain" />
+        <div>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <MessageSquareHeart className="w-5 h-5 text-amber-400" />
+            Feedback Center
+          </h1>
+          <p className="text-xs text-slate-400">
+            Peer critique & session evaluations • Earn +5 pts for feedback
+          </p>
+        </div>
       </div>
 
       {/* 3 Tabs in the Pill Bar for Members */}

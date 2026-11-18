@@ -57,7 +57,8 @@ export default function AvatarCustomizer({
     <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
       <div className="max-w-md w-full bg-slate-900 border-2 border-yellow-400/40 rounded-3xl p-6 shadow-2xl space-y-5 my-auto">
         {/* Title & Permanent ID Announcement */}
-        <div className="text-center space-y-2">
+        <div className="text-center space-y-2 flex flex-col items-center">
+          <img src="/enactus-icon.png" alt="Enactus" className="w-8 h-8 object-contain mb-1" />
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-yellow-400/10 border border-yellow-400/30 rounded-full text-yellow-400 text-xs font-bold">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Welcome to Enactus Presentations!</span>

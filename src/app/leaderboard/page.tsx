@@ -51,13 +51,16 @@ export default function LeaderboardPage() {
   return (
     <div className="space-y-4 pb-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-yellow-400" />
-            Leaderboard
-          </h1>
-          <p className="text-xs text-slate-400">Presentations Committee live standings</p>
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-3">
+          <img src="/enactus-icon.png" alt="Enactus" className="w-8 h-8 object-contain" />
+          <div>
+            <h1 className="text-xl font-bold text-white flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-yellow-400" />
+              Leaderboard
+            </h1>
+            <p className="text-xs text-slate-400">Presentations Committee live standings</p>
+          </div>
         </div>
 
         <button
@@ -73,8 +76,9 @@ export default function LeaderboardPage() {
       {/* Leaderboard List */}
       <div className="space-y-2 mt-2">
         {loading && rankedMembers.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-xs">
-            Loading ranks...
+          <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs gap-2">
+            <img src="/enactus-icon.png" alt="Enactus" className="w-8 h-8 object-contain animate-pulse" />
+            <span>Loading ranks...</span>
           </div>
         ) : rankedMembers.length === 0 ? (
           <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-800 text-slate-400 text-xs">

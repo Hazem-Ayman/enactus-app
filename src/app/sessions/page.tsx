@@ -238,13 +238,14 @@ export default function SessionsPage() {
     <div className="space-y-5 pb-8">
       {/* Top Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <Link
             href="/"
             className="p-1.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
+          <img src="/enactus-icon.png" alt="Enactus" className="w-6 h-6 object-contain" />
           <div>
             <h1 className="text-base font-bold text-white flex items-center gap-1.5">
               <CalendarCheck className="w-4 h-4 text-yellow-400" />

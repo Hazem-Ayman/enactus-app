@@ -265,8 +265,13 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh] text-slate-400 text-xs">
-        Loading Enactus Presentations...
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 text-xs gap-3">
+        <img
+          src="/enactus-icon.png"
+          alt="Enactus"
+          className="w-10 h-10 object-contain animate-pulse"
+        />
+        <span>Loading Enactus Presentations...</span>
       </div>
     );
   }
@@ -278,11 +283,14 @@ export default function HomePage() {
       <div className="space-y-6 pb-6">
         {/* Top Coordinator Bar */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" />
-            <span className="text-xs font-black text-yellow-400 uppercase tracking-wider">
-              Coordinator Portal • Hazem
-            </span>
+          <div className="flex items-center gap-2.5">
+            <img src="/enactus-icon.png" alt="Enactus" className="w-5 h-5 object-contain" />
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              <span className="text-xs font-black text-yellow-400 uppercase tracking-wider">
+                Coordinator Portal • Hazem
+              </span>
+            </div>
           </div>
           <button
             onClick={handleSignOut}
@@ -295,14 +303,17 @@ export default function HomePage() {
 
         {/* Coordinator Hero Banner */}
         <div className="p-5 bg-gradient-to-br from-yellow-500/20 via-amber-600/10 to-slate-900 border-2 border-yellow-400/40 rounded-3xl space-y-2 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-yellow-400 text-slate-950 rounded-2xl shadow-md">
-              <Shield className="w-6 h-6" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-yellow-400 text-slate-950 rounded-2xl shadow-md">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-lg font-black text-white">Presentations Command Center</h1>
+                <p className="text-xs text-yellow-300/80 font-mono">Coordinator ID: ENC-2302</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-lg font-black text-white">Presentations Command Center</h1>
-              <p className="text-xs text-yellow-300/80 font-mono">Coordinator ID: ENC-2302</p>
-            </div>
+            <img src="/enactus-icon.png" alt="Enactus" className="w-8 h-8 object-contain opacity-75 hidden sm:block" />
           </div>
           <p className="text-xs text-slate-300 leading-relaxed">
             Manage live session points, random picker & feature toggles below:
@@ -323,9 +334,12 @@ export default function HomePage() {
       <div className="space-y-6 pb-6">
         {/* Top Bar with Switch Account */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs font-semibold text-slate-400">Presentations Member</span>
+          <div className="flex items-center gap-2.5">
+            <img src="/enactus-icon.png" alt="Enactus" className="w-5 h-5 object-contain" />
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xs font-semibold text-slate-300">Presentations Member</span>
+            </div>
           </div>
           <button
             onClick={handleSignOut}
@@ -622,13 +636,18 @@ export default function HomePage() {
   return (
     <div className="space-y-6 pb-6">
       {/* App Header */}
-      <div className="text-center space-y-1 pt-4">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-yellow-400 text-slate-950 font-black text-xl mb-2 shadow-lg shadow-yellow-500/20">
-          E
+      <div className="text-center space-y-2 pt-4 flex flex-col items-center">
+        <div className="relative mb-1">
+          <img
+            src="/enactus-logo-white.png"
+            alt="Enactus Assiut University"
+            className="h-16 w-auto object-contain drop-shadow-[0_4px_20px_rgba(234,179,8,0.25)]"
+          />
         </div>
-        <h1 className="text-xl font-black text-white tracking-tight">
-          Enactus AU Presentations
-        </h1>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[11px] font-bold tracking-wide uppercase">
+          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+          Presentations Committee
+        </div>
         <p className="text-xs text-slate-400 max-w-xs mx-auto">
           Presentations Committee Platform & Peer Education
         </p>

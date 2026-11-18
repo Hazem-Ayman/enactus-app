@@ -99,6 +99,7 @@ export default function GuidelinesPage() {
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
+          <img src="/enactus-icon.png" alt="Enactus" className="w-7 h-7 object-contain" />
           <div>
             <h1 className="text-xl font-bold text-white flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-yellow-400" />

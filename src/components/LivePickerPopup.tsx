@@ -43,6 +43,9 @@ export default function LivePickerPopup() {
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
       <div className="max-w-xs w-full bg-slate-900 border-2 border-yellow-400 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="absolute top-3 left-3 p-1 rounded-lg bg-slate-800/80">
+          <img src="/enactus-icon.png" alt="Enactus" className="w-4 h-4 object-contain" />
+        </div>
         <button
           onClick={() => setVisible(false)}
           className="absolute top-3 right-3 p-1.5 text-slate-400 hover:text-white rounded-full bg-slate-800"

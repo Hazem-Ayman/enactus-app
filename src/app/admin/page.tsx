@@ -33,13 +33,20 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 space-y-6">
-        <div className="w-16 h-16 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-yellow-400">
-          <Lock className="w-8 h-8" />
+        <div className="flex flex-col items-center space-y-2">
+          <img
+            src="/enactus-logo-white.png"
+            alt="Enactus Assiut University"
+            className="h-16 w-auto object-contain drop-shadow-[0_4px_16px_rgba(234,179,8,0.2)]"
+          />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[11px] font-bold">
+            <Lock className="w-3.5 h-3.5" />
+            <span>Coordinators Access</span>
+          </div>
         </div>
 
         <div className="text-center space-y-1">
-          <h1 className="text-xl font-bold text-white">Coordinators Access</h1>
-          <p className="text-xs text-slate-400">Enter your coordinator password</p>
+          <p className="text-xs text-slate-400">Enter your coordinator secret password</p>
         </div>
 
         <form onSubmit={handleLogin} className="w-full max-w-xs space-y-3">
@@ -69,7 +76,8 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-4 pb-6">
-      <div className="border-b border-slate-800 pb-3">
+      <div className="border-b border-slate-800 pb-3 flex items-center gap-2.5">
+        <img src="/enactus-icon.png" alt="Enactus" className="w-5 h-5 object-contain" />
         <h1 className="text-base font-bold text-white">Admin Dashboard</h1>
       </div>
       <AdminContent />
