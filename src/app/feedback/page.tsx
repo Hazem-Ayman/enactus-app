@@ -28,17 +28,28 @@ import {
   ShieldCheck,
   EyeOff,
   Trash2,
-  Users
+  Lock,
+  Unlock,
+  KeyRound,
+  X,
+  TrendingUp,
+  UserCheck
 } from 'lucide-react';
 
 export default function FeedbackPage() {
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Coordinator Authentication & Secret View State
+  const [isCoordinatorUnlocked, setIsCoordinatorUnlocked] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
-  // Tabs for regular members: 'peer' | 'session' | 'inbox'
-  // Tabs for coordinator admin: 'all-peer' | 'all-session'
+  // Tabs for regular members / safe view: 'peer' | 'session' | 'inbox'
   const [activeTab, setActiveTab] = useState<'peer' | 'session' | 'inbox'>('peer');
-  const [adminTab, setAdminTab] = useState<'all-peer' | 'all-session'>('all-peer');
+
+  // Subtabs inside coordinator unlocked view: 'all-session' | 'all-peer'
+  const [adminTab, setAdminTab] = useState<'all-session' | 'all-peer'>('all-session');
 
   // Members list for giving peer feedback
   const [members, setMembers] = useState<Member[]>([]);
@@ -51,7 +62,7 @@ export default function FeedbackPage() {
   const [inboxList, setInboxList] = useState<Feedback[]>([]);
   const [loadingInbox, setLoadingInbox] = useState(false);
 
-  // Admin Oversight Lists
+  // Coordinator Confidential Lists (Loaded ONLY when coordinator unlocks)
   const [allFeedbackList, setAllFeedbackList] = useState<Feedback[]>([]);
   const [allSessionFeedbackList, setAllSessionFeedbackList] = useState<SessionFeedback[]>([]);
   const [loadingAdmin, setLoadingAdmin] = useState(false);
@@ -68,17 +79,13 @@ export default function FeedbackPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Load current member
+  // Load current member on mount
   useEffect(() => {
     const saved = localStorage.getItem('enactus_member');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         setCurrentMember(parsed);
-        if (parsed.id === 'ENC-2302' || parsed.role === 'admin') {
-          setIsAdmin(true);
-          loadAdminFeed();
-        }
       } catch (e) {
         console.error(e);
       }
@@ -95,6 +102,7 @@ export default function FeedbackPage() {
     }
   };
 
+  // Securely load coordinator feeds ONLY upon unlocking
   const loadAdminFeed = async () => {
     setLoadingAdmin(true);
     try {
@@ -105,7 +113,7 @@ export default function FeedbackPage() {
       setAllFeedbackList(peerList);
       setAllSessionFeedbackList(sessionList);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading confidential coordinator feed:', err);
     } finally {
       setLoadingAdmin(false);
     }
@@ -130,6 +138,42 @@ export default function FeedbackPage() {
     if (tab === 'inbox' && currentMember) {
       loadInbox(currentMember.id);
     }
+  };
+
+  // Open Coordinator Portal: check existing session or ask for password
+  const handleOpenCoordinatorPortal = () => {
+    const hasAdminSession = sessionStorage.getItem('enactus_admin_auth') === 'true';
+    if (hasAdminSession) {
+      setIsCoordinatorUnlocked(true);
+      loadAdminFeed();
+    } else {
+      setShowPasswordModal(true);
+      setPasswordError('');
+      setPasswordInput('');
+    }
+  };
+
+  // Verify Coordinator Password
+  const handleVerifyPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    const correctPass = '23022006Ha#';
+    if (passwordInput.trim() === correctPass) {
+      sessionStorage.setItem('enactus_admin_auth', 'true');
+      setShowPasswordModal(false);
+      setPasswordInput('');
+      setPasswordError('');
+      setIsCoordinatorUnlocked(true);
+      loadAdminFeed();
+    } else {
+      setPasswordError('Incorrect coordinator password. Access denied.');
+    }
+  };
+
+  // Lock and return to Safe Member View immediately
+  const handleLockCoordinatorView = () => {
+    setIsCoordinatorUnlocked(false);
+    setAllFeedbackList([]);
+    setAllSessionFeedbackList([]);
   };
 
   // Submit Peer Feedback (Member only)
@@ -166,7 +210,7 @@ export default function FeedbackPage() {
         wish,
       });
 
-      setSuccessMsg(`Feedback sent to ${targetMember.name}! You earned +5 points! ⭐`);
+      setSuccessMsg(`Feedback sent privately to ${targetMember.name}! You earned +5 points! ⭐`);
       setStar1('');
       setStar2('');
       setWish('');
@@ -204,7 +248,7 @@ export default function FeedbackPage() {
       });
 
       setSuccessMsg(
-        'Thank you! Your feedback has been submitted, and +5 bonus points were added to your profile! ⭐'
+        'Thank you! Your evaluation is securely recorded for the coordinator only, and +5 bonus points were added! ⭐'
       );
       setKeyTakeaway('');
       setImprovementWish('');
@@ -219,7 +263,7 @@ export default function FeedbackPage() {
 
   // Admin Actions: Delete inappropriate peer feedback
   const handleDeletePeerFeedback = async (id: string) => {
-    const confirmDelete = window.confirm('Delete this feedback entry permanently?');
+    const confirmDelete = window.confirm('Delete this peer feedback entry permanently?');
     if (!confirmDelete) return;
     try {
       await deleteFeedbackItem(id);
@@ -258,46 +302,57 @@ export default function FeedbackPage() {
     }
   };
 
+  // Summary Metrics for Coordinator
+  const totalSessionReviews = allSessionFeedbackList.length;
+  const avgSessionRating = totalSessionReviews > 0
+    ? (allSessionFeedbackList.reduce((acc, curr) => acc + (curr.sessionRating || 5), 0) / totalSessionReviews).toFixed(1)
+    : '5.0';
+  const avgCoordinatorRating = totalSessionReviews > 0
+    ? (allSessionFeedbackList.reduce((acc, curr) => acc + (curr.coordinatorRating || 5), 0) / totalSessionReviews).toFixed(1)
+    : '5.0';
+
   // ==========================================
-  // VIEW A: COORDINATOR ADMIN FEEDBACK VIEW
+  // VIEW A: COORDINATOR CONFIDENTIAL OVERSIGHT VIEW
+  // (Only visible when unlocked with Coordinator Secret Password)
   // ==========================================
-  if (isAdmin) {
+  if (isCoordinatorUnlocked) {
     return (
-      <div className="space-y-4 pb-6">
-        {/* Header */}
+      <div className="space-y-4 pb-8">
+        {/* Header with Lock Button */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <img src="/enactus-icon.png" alt="Enactus" className="w-6 h-6 object-contain" />
             <div>
               <h1 className="text-base font-bold text-white flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-yellow-400" />
-                <span>Feedback Moderation Portal</span>
+                <span>Coordinator Confidential Portal</span>
               </h1>
-              <p className="text-[10px] text-slate-400">Coordinator live oversight • Delete inappropriate entries</p>
+              <p className="text-[10px] text-slate-400">
+                Private session & coordinator evaluations • Only you see this
+              </p>
             </div>
           </div>
-          <button
-            onClick={loadAdminFeed}
-            className="text-xs text-yellow-400 hover:underline"
-          >
-            Refresh Feed
-          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadAdminFeed}
+              className="text-xs text-yellow-400 hover:underline px-2 py-1"
+            >
+              Refresh
+            </button>
+            <button
+              onClick={handleLockCoordinatorView}
+              className="px-2.5 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-sm"
+              title="Lock and hide confidential view"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Lock & Hide</span>
+            </button>
+          </div>
         </div>
 
         {/* 2 Coordinator Oversight Tabs */}
-        <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
-          <button
-            onClick={() => setAdminTab('all-peer')}
-            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              adminTab === 'all-peer'
-                ? 'bg-yellow-400 text-slate-950 font-bold shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <MessageSquareHeart className="w-4 h-4" />
-            <span>Peer Critiques ({allFeedbackList.length})</span>
-          </button>
-
+        <div className="grid grid-cols-2 gap-1.5 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
           <button
             onClick={() => setAdminTab('all-session')}
             className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
@@ -309,9 +364,125 @@ export default function FeedbackPage() {
             <Presentation className="w-4 h-4" />
             <span>Session & Lead ({allSessionFeedbackList.length})</span>
           </button>
+
+          <button
+            onClick={() => setAdminTab('all-peer')}
+            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              adminTab === 'all-peer'
+                ? 'bg-yellow-400 text-slate-950 font-bold shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <MessageSquareHeart className="w-4 h-4" />
+            <span>Peer Critiques ({allFeedbackList.length})</span>
+          </button>
         </div>
 
-        {/* SUBTAB 1: ALL PEER FEEDBACK */}
+        {/* SUBTAB 1: ALL SESSION & COORDINATOR EVALUATIONS */}
+        {adminTab === 'all-session' && (
+          <div className="space-y-3">
+            {/* Quick Summary Cards */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-2xl text-center space-y-0.5">
+                <span className="text-[10px] text-slate-400 block font-medium">Session Score</span>
+                <span className="text-base font-black text-amber-400 flex items-center justify-center gap-1">
+                  ★ {avgSessionRating}
+                </span>
+                <span className="text-[9px] text-slate-500">out of 5.0</span>
+              </div>
+
+              <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-2xl text-center space-y-0.5">
+                <span className="text-[10px] text-slate-400 block font-medium">Lead Support</span>
+                <span className="text-base font-black text-yellow-400 flex items-center justify-center gap-1">
+                  ★ {avgCoordinatorRating}
+                </span>
+                <span className="text-[9px] text-slate-500">out of 5.0</span>
+              </div>
+
+              <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-2xl text-center space-y-0.5">
+                <span className="text-[10px] text-slate-400 block font-medium">Total Reviews</span>
+                <span className="text-base font-black text-white flex items-center justify-center gap-1">
+                  {totalSessionReviews}
+                </span>
+                <span className="text-[9px] text-slate-500">feedbacks</span>
+              </div>
+            </div>
+
+            {loadingAdmin ? (
+              <p className="text-center py-8 text-xs text-slate-400">Loading confidential evaluations...</p>
+            ) : allSessionFeedbackList.length === 0 ? (
+              <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
+                No session evaluations submitted yet.
+              </div>
+            ) : (
+              allSessionFeedbackList.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-3.5 bg-slate-800/70 border border-slate-700/80 rounded-2xl space-y-2.5 shadow-sm"
+                >
+                  <div className="flex items-center justify-between text-xs border-b border-slate-700/50 pb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white flex items-center gap-1">
+                        {item.isAnonymous ? (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Anonymous Member</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>{item.memberName}</span>
+                          </>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {new Date(item.createdAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1.5 text-[10px]">
+                        <span className="text-amber-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                          Session: {item.sessionRating}★
+                        </span>
+                        <span className="text-yellow-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
+                          Lead: {item.coordinatorRating}★
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteSessionFeedback(item.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700"
+                        title="Delete evaluation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] space-y-1.5 text-slate-300">
+                    <div className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
+                      <strong className="text-emerald-400 block mb-0.5 font-semibold">
+                        💡 Most Helpful / Liked:
+                      </strong>
+                      <p className="text-slate-200">{item.keyTakeaway}</p>
+                    </div>
+                    <div className="bg-sky-500/10 p-2.5 rounded-xl border border-sky-500/20">
+                      <strong className="text-sky-400 block mb-0.5 font-semibold">
+                        ✨ Suggestion / Improvement for Coordinator:
+                      </strong>
+                      <p className="text-slate-200">{item.improvementWish}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* SUBTAB 2: ALL PEER FEEDBACK MODERATION */}
         {adminTab === 'all-peer' && (
           <div className="space-y-2.5">
             {loadingAdmin ? (
@@ -372,90 +543,43 @@ export default function FeedbackPage() {
             )}
           </div>
         )}
-
-        {/* SUBTAB 2: ALL SESSION & COORDINATOR EVALUATIONS */}
-        {adminTab === 'all-session' && (
-          <div className="space-y-2.5">
-            {loadingAdmin ? (
-              <p className="text-center py-8 text-xs text-slate-400">Loading evaluations...</p>
-            ) : allSessionFeedbackList.length === 0 ? (
-              <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
-                No session evaluations submitted yet.
-              </div>
-            ) : (
-              allSessionFeedbackList.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3.5 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-2.5"
-                >
-                  <div className="flex items-center justify-between text-xs border-b border-slate-700/50 pb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white">
-                        {item.isAnonymous ? '🕵️ Anonymous Member' : item.memberName}
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-2 text-[10px]">
-                        <span className="text-amber-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
-                          Session: {item.sessionRating}★
-                        </span>
-                        <span className="text-yellow-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700">
-                          Lead: {item.coordinatorRating}★
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteSessionFeedback(item.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700"
-                        title="Delete evaluation"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] space-y-1.5 text-slate-300">
-                    <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
-                      <strong className="text-emerald-400 block mb-0.5">Most Helpful / Liked:</strong>
-                      {item.keyTakeaway}
-                    </div>
-                    <div className="bg-sky-500/10 p-2 rounded-xl border border-sky-500/20">
-                      <strong className="text-sky-400 block mb-0.5">Suggestion / Improvement Wish:</strong>
-                      {item.improvementWish}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
       </div>
     );
   }
 
   // ==========================================
-  // VIEW B: REGULAR MEMBER FEEDBACK VIEW
+  // VIEW B: SAFE DEFAULT MEMBER FEEDBACK VIEW
+  // (Always the default; zero exposure of session reviews or other members' critiques)
   // ==========================================
   return (
     <div className="space-y-4 pb-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <img src="/enactus-icon.png" alt="Enactus" className="w-8 h-8 object-contain" />
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <MessageSquareHeart className="w-5 h-5 text-amber-400" />
-            Feedback Center
-          </h1>
-          <p className="text-xs text-slate-400">
-            Peer critique & session evaluations • Earn +5 pts for feedback
-          </p>
+      {/* Header with Safe Mode info & Coordinator Portal button */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-2.5">
+          <img src="/enactus-icon.png" alt="Enactus" className="w-7 h-7 object-contain" />
+          <div>
+            <h1 className="text-lg font-bold text-white flex items-center gap-2">
+              <MessageSquareHeart className="w-5 h-5 text-amber-400" />
+              <span>Feedback Center</span>
+            </h1>
+            <p className="text-[10px] text-slate-400">
+              Presentations peer critiques & confidential session evaluations
+            </p>
+          </div>
         </div>
+
+        {/* Discrete Coordinator Secret Unlock Button */}
+        <button
+          onClick={handleOpenCoordinatorPortal}
+          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-yellow-400 border border-slate-700 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+          title="Coordinator Secret Access to view Session Evaluations"
+        >
+          <Lock className="w-3.5 h-3.5 text-yellow-400" />
+          <span>Coordinator View</span>
+        </button>
       </div>
 
-      {/* 3 Tabs in the Pill Bar for Members */}
+      {/* 3 Safe Tabs in the Pill Bar for Members */}
       <div className="grid grid-cols-3 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => handleTabChange('peer')}
@@ -581,7 +705,7 @@ export default function FeedbackPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+            className="w-full py-3 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Send className="w-4 h-4" />
             <span>{submitting ? 'Submitting & Awarding Points...' : 'Send Feedback (+5 pts)'}</span>
@@ -589,7 +713,7 @@ export default function FeedbackPage() {
         </form>
       )}
 
-      {/* TAB 2: SESSION & COORDINATOR EVALUATION */}
+      {/* TAB 2: SESSION & COORDINATOR EVALUATION (Strictly Private to Coordinator) */}
       {activeTab === 'session' && (
         <form onSubmit={handleSessionSubmit} className="bg-slate-800/50 border border-slate-700/60 p-4 rounded-3xl space-y-4">
           <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-700/60 space-y-1">
@@ -598,8 +722,12 @@ export default function FeedbackPage() {
               <span>Session & Coordinator Evaluation</span>
             </span>
             <p className="text-[11px] text-slate-400">
-              Help your coordinator make every session more valuable and engaging.
+              Help your coordinator improve every session.
             </p>
+            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/20 text-yellow-300 text-[10px] font-semibold mt-1">
+              <Lock className="w-3 h-3 text-yellow-400" />
+              <span>Confidential: Only the coordinator can read this evaluation</span>
+            </div>
           </div>
 
           {/* Session Rating */}
@@ -614,7 +742,7 @@ export default function FeedbackPage() {
                   type="button"
                   key={star}
                   onClick={() => setSessionRating(star)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                     sessionRating >= star
                       ? 'bg-amber-500/20 border-amber-400 text-amber-300'
                       : 'bg-slate-900 border-slate-700 text-slate-500'
@@ -638,7 +766,7 @@ export default function FeedbackPage() {
                   type="button"
                   key={star}
                   onClick={() => setCoordinatorRating(star)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                     coordinatorRating >= star
                       ? 'bg-yellow-500/20 border-yellow-400 text-yellow-300'
                       : 'bg-slate-900 border-slate-700 text-slate-500'
@@ -689,8 +817,8 @@ export default function FeedbackPage() {
                 <span className="text-xs font-semibold text-white block">Submit Anonymously</span>
                 <span className="text-[10px] text-slate-400">
                   {isAnonymous
-                    ? 'Your name is completely hidden from the coordinator'
-                    : 'Coordinator will see who sent this'}
+                    ? 'Your name will not be shown to the coordinator'
+                    : 'Coordinator will see your name'}
                 </span>
               </div>
             </div>
@@ -710,19 +838,27 @@ export default function FeedbackPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-3 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
+            className="w-full py-3 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <Send className="w-4 h-4" />
             <span>
-              {submitting ? 'Submitting...' : 'Send Feedback (+5 pts)'}
+              {submitting ? 'Submitting...' : 'Send Evaluation (+5 pts)'}
             </span>
           </button>
         </form>
       )}
 
-      {/* TAB 3: INBOX */}
+      {/* TAB 3: INBOX (Strictly Private to the Recipient Member) */}
       {activeTab === 'inbox' && (
         <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-semibold text-slate-300">Your Received Peer Feedback</span>
+            <span className="text-[10px] text-yellow-400/90 font-medium flex items-center gap-1 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">
+              <Lock className="w-2.5 h-2.5" />
+              <span>Private to you</span>
+            </span>
+          </div>
+
           {!currentMember ? (
             <div className="text-center py-12 text-slate-400 text-xs">
               Please sign up or log in first on the Home screen to view your feedback.
@@ -803,6 +939,75 @@ export default function FeedbackPage() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* COORDINATOR SECRET PASSWORD AUTHENTICATION MODAL */}
+      {/* ========================================== */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowPasswordModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 text-yellow-400">
+                <KeyRound className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Coordinator Verification</h3>
+                <p className="text-[10px] text-slate-400">
+                  Enter coordinator password to view private evaluations
+                </p>
+              </div>
+            </div>
+
+            {passwordError && (
+              <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl flex items-center gap-1.5 font-medium">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleVerifyPassword} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-300">
+                  Coordinator Secret Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Enter secret password..."
+                  className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Unlock className="w-3.5 h-3.5" />
+                  <span>Unlock</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

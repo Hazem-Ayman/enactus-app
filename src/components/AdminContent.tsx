@@ -9,9 +9,11 @@ import {
   broadcastGroupsState, 
   getSectionToggles, 
   updateSectionToggles, 
-  SectionToggles 
+  SectionToggles,
+  getAllSessionFeedback,
+  deleteSessionFeedbackItem
 } from '@/lib/firestore';
-import { Member } from '@/types';
+import { Member, SessionFeedback } from '@/types';
 import DiceBearAvatar from '@/components/DiceBearAvatar';
 import confetti from 'canvas-confetti';
 import { 
@@ -27,12 +29,17 @@ import {
   ToggleLeft,
   ToggleRight,
   Gamepad2,
-  MessageSquareHeart
+  MessageSquareHeart,
+  Presentation,
+  EyeOff,
+  UserCheck,
+  Trash2,
+  Lock
 } from 'lucide-react';
 
 export default function AdminContent() {
-  // Only 3 Tabs on Home: Points, Picker, Toggles
-  const [activeTab, setActiveTab] = useState<'points' | 'picker' | 'toggles'>('points');
+  // 4 Tabs on Coordinator Command Center: Points, Picker, Evaluations, Toggles
+  const [activeTab, setActiveTab] = useState<'points' | 'picker' | 'evaluations' | 'toggles'>('points');
 
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
@@ -62,9 +69,37 @@ export default function AdminContent() {
   });
   const [togglesMsg, setTogglesMsg] = useState('');
 
+  // Confidential Session Feedback State (Coordinator Only)
+  const [sessionFeedbacks, setSessionFeedbacks] = useState<SessionFeedback[]>([]);
+  const [loadingFeedbacks, setLoadingFeedbacks] = useState(false);
+
   useEffect(() => {
     loadData();
+    loadSessionFeedbacks();
   }, []);
+
+  const loadSessionFeedbacks = async () => {
+    setLoadingFeedbacks(true);
+    try {
+      const data = await getAllSessionFeedback();
+      setSessionFeedbacks(data);
+    } catch (err) {
+      console.error('Error fetching session feedback:', err);
+    } finally {
+      setLoadingFeedbacks(false);
+    }
+  };
+
+  const handleDeleteFeedback = async (id: string) => {
+    const confirmDelete = window.confirm('Delete this evaluation record permanently?');
+    if (!confirmDelete) return;
+    try {
+      await deleteSessionFeedbackItem(id);
+      setSessionFeedbacks((prev) => prev.filter((f) => f.id !== id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -276,41 +311,53 @@ export default function AdminContent() {
 
   return (
     <div className="space-y-4">
-      {/* 3 Clean Action Tabs: Points, Picker, Toggles */}
-      <div className="grid grid-cols-3 gap-1.5 bg-slate-800/80 p-1.5 rounded-2xl text-xs font-semibold shadow-inner border border-slate-700/60">
+      {/* 4 Coordinator Action Tabs: Points, Picker, Evaluations, Toggles */}
+      <div className="grid grid-cols-4 gap-1 bg-slate-800/80 p-1 rounded-2xl text-[11px] font-semibold shadow-inner border border-slate-700/60">
         <button
           onClick={() => setActiveTab('points')}
-          className={`py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
             activeTab === 'points'
               ? 'bg-yellow-400 text-slate-950 font-black shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Award className="w-4 h-4" />
+          <Award className="w-3.5 h-3.5" />
           <span>Points</span>
         </button>
 
         <button
           onClick={() => setActiveTab('picker')}
-          className={`py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
             activeTab === 'picker'
               ? 'bg-yellow-400 text-slate-950 font-black shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Shuffle className="w-4 h-4" />
+          <Shuffle className="w-3.5 h-3.5" />
           <span>Picker</span>
         </button>
 
         <button
+          onClick={() => setActiveTab('evaluations')}
+          className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
+            activeTab === 'evaluations'
+              ? 'bg-yellow-400 text-slate-950 font-black shadow-md'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <MessageSquareHeart className="w-3.5 h-3.5" />
+          <span className="truncate">Reviews</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('toggles')}
-          className={`py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+          className={`py-2 rounded-xl flex items-center justify-center gap-1 transition-all cursor-pointer ${
             activeTab === 'toggles'
               ? 'bg-yellow-400 text-slate-950 font-black shadow-md'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <SlidersHorizontal className="w-4 h-4" />
+          <SlidersHorizontal className="w-3.5 h-3.5" />
           <span>Toggles</span>
         </button>
       </div>
@@ -638,7 +685,132 @@ export default function AdminContent() {
         </div>
       )}
 
-      {/* --- TAB 3: FEATURE SECTION TOGGLES --- */}
+      {/* --- TAB 3: CONFIDENTIAL SESSION & LEAD EVALUATIONS --- */}
+      {activeTab === 'evaluations' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">
+            <div>
+              <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <MessageSquareHeart className="w-4 h-4 text-yellow-400" />
+                <span>Session & Coordinator Feedback</span>
+              </h3>
+              <p className="text-[10px] text-slate-400">
+                Confidential reviews submitted by members • Only visible here in coordinator portal
+              </p>
+            </div>
+            <button
+              onClick={loadSessionFeedbacks}
+              className="text-[11px] text-yellow-400 hover:underline px-2 py-1"
+            >
+              Refresh
+            </button>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-2xl text-center space-y-0.5">
+              <span className="text-[10px] text-slate-400 block font-medium">Session Score</span>
+              <span className="text-sm font-black text-amber-400">
+                ★ {sessionFeedbacks.length > 0
+                  ? (sessionFeedbacks.reduce((acc, c) => acc + (c.sessionRating || 5), 0) / sessionFeedbacks.length).toFixed(1)
+                  : '5.0'}
+              </span>
+              <span className="text-[8px] text-slate-500">out of 5.0</span>
+            </div>
+
+            <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-2xl text-center space-y-0.5">
+              <span className="text-[10px] text-slate-400 block font-medium">Lead Score</span>
+              <span className="text-sm font-black text-yellow-400">
+                ★ {sessionFeedbacks.length > 0
+                  ? (sessionFeedbacks.reduce((acc, c) => acc + (c.coordinatorRating || 5), 0) / sessionFeedbacks.length).toFixed(1)
+                  : '5.0'}
+              </span>
+              <span className="text-[8px] text-slate-500">out of 5.0</span>
+            </div>
+
+            <div className="p-3 bg-slate-900/90 border border-slate-700/80 rounded-2xl text-center space-y-0.5">
+              <span className="text-[10px] text-slate-400 block font-medium">Total Reviews</span>
+              <span className="text-sm font-black text-white">
+                {sessionFeedbacks.length}
+              </span>
+              <span className="text-[8px] text-slate-500">evaluations</span>
+            </div>
+          </div>
+
+          {/* List of Feedback Cards */}
+          {loadingFeedbacks ? (
+            <div className="text-center py-8 text-xs text-slate-400">Loading confidential reviews...</div>
+          ) : sessionFeedbacks.length === 0 ? (
+            <div className="text-center py-10 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
+              No session evaluations submitted yet.
+            </div>
+          ) : (
+            <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+              {sessionFeedbacks.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-3.5 bg-slate-800/70 border border-slate-700/80 rounded-2xl space-y-2 shadow-sm"
+                >
+                  <div className="flex items-center justify-between text-xs border-b border-slate-700/50 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      {item.isAnonymous ? (
+                        <span className="font-bold text-slate-300 flex items-center gap-1 text-[11px]">
+                          <EyeOff className="w-3 h-3 text-slate-400" />
+                          <span>Anonymous</span>
+                        </span>
+                      ) : (
+                        <span className="font-bold text-emerald-300 flex items-center gap-1 text-[11px]">
+                          <UserCheck className="w-3 h-3 text-emerald-400" />
+                          <span>{item.memberName}</span>
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-500">
+                        • {new Date(item.createdAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-amber-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700 text-[10px]">
+                        Session: {item.sessionRating}★
+                      </span>
+                      <span className="text-yellow-400 font-bold bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-700 text-[10px]">
+                        Lead: {item.coordinatorRating}★
+                      </span>
+                      <button
+                        onClick={() => handleDeleteFeedback(item.id)}
+                        className="p-1 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700"
+                        title="Delete evaluation"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] space-y-1.5 text-slate-300">
+                    <div className="bg-emerald-500/10 p-2 rounded-xl border border-emerald-500/20">
+                      <strong className="text-emerald-400 block mb-0.5 text-[10px]">
+                        💡 Most Helpful / Liked:
+                      </strong>
+                      <p className="text-slate-200 text-xs">{item.keyTakeaway}</p>
+                    </div>
+                    <div className="bg-sky-500/10 p-2 rounded-xl border border-sky-500/20">
+                      <strong className="text-sky-400 block mb-0.5 text-[10px]">
+                        ✨ Improvement Wish:
+                      </strong>
+                      <p className="text-slate-200 text-xs">{item.improvementWish}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- TAB 4: FEATURE SECTION TOGGLES --- */}
       {activeTab === 'toggles' && (
         <div className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-4">
           <div>
