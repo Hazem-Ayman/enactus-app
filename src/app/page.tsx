@@ -197,6 +197,17 @@ export default function HomePage() {
         avatar: defaultAvatar,
       });
 
+      // Immediately log the member in and persist session to go straight to Home page
+      localStorage.setItem('enactus_member', JSON.stringify(newMember));
+      setCurrentMember(newMember);
+      window.dispatchEvent(new Event('storage'));
+      loadUserExtras(newMember.id);
+      getAllMembers().then((all) => {
+        setAllMembers(all);
+        const index = all.findIndex((m) => m.id === newMember.id);
+        if (index !== -1) setRank(index + 1);
+      });
+
       setNewMemberCreated(newMember);
       setShowCustomizer(true);
       confetti({ particleCount: 70, spread: 60 });
@@ -209,18 +220,25 @@ export default function HomePage() {
   };
 
   const handleCompleteCustomization = async (avatar: AvatarConfig) => {
-    if (!newMemberCreated) return;
+    const memberToUpdate = newMemberCreated || currentMember;
+    if (!memberToUpdate) {
+      setShowCustomizer(false);
+      return;
+    }
 
+    const updated = { ...memberToUpdate, avatar };
+    // Immediately persist and stay on Home page
+    localStorage.setItem('enactus_member', JSON.stringify(updated));
+    setCurrentMember(updated);
+    window.dispatchEvent(new Event('storage'));
+    setShowCustomizer(false);
+    setNewMemberCreated(null);
+
+    // Save avatar updates to Firestore in background
     try {
-      await updateMemberAvatar(newMemberCreated.id, avatar);
-      const updated = { ...newMemberCreated, avatar };
-      localStorage.setItem('enactus_member', JSON.stringify(updated));
-      setCurrentMember(updated);
-      setShowCustomizer(false);
-      setNewMemberCreated(null);
+      await updateMemberAvatar(memberToUpdate.id, avatar);
     } catch (err) {
-      console.error(err);
-      setShowCustomizer(false);
+      console.error('Failed to update avatar in Firestore:', err);
     }
   };
 
