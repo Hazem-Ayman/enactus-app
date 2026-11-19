@@ -28,27 +28,21 @@ import {
   ShieldCheck,
   EyeOff,
   Trash2,
-  Lock,
-  Unlock,
-  KeyRound,
-  X,
-  TrendingUp,
-  UserCheck
+  UserCheck,
+  Eye
 } from 'lucide-react';
 
 export default function FeedbackPage() {
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
-  
-  // Coordinator Authentication & Secret View State
-  const [isCoordinatorUnlocked, setIsCoordinatorUnlocked] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Tabs for regular members / safe view: 'peer' | 'session' | 'inbox'
+  // Toggle for admin account between moderation oversight & member form view
+  const [adminMode, setAdminMode] = useState<'oversight' | 'member'>('oversight');
+
+  // Tabs for regular members: 'peer' | 'session' | 'inbox'
   const [activeTab, setActiveTab] = useState<'peer' | 'session' | 'inbox'>('peer');
 
-  // Subtabs inside coordinator unlocked view: 'all-session' | 'all-peer'
+  // Subtabs for admin account: 'all-session' | 'all-peer'
   const [adminTab, setAdminTab] = useState<'all-session' | 'all-peer'>('all-session');
 
   // Members list for giving peer feedback
@@ -62,7 +56,7 @@ export default function FeedbackPage() {
   const [inboxList, setInboxList] = useState<Feedback[]>([]);
   const [loadingInbox, setLoadingInbox] = useState(false);
 
-  // Coordinator Confidential Lists (Loaded ONLY when coordinator unlocks)
+  // Admin Oversight Lists (Loaded ONLY if logged in as admin)
   const [allFeedbackList, setAllFeedbackList] = useState<Feedback[]>([]);
   const [allSessionFeedbackList, setAllSessionFeedbackList] = useState<SessionFeedback[]>([]);
   const [loadingAdmin, setLoadingAdmin] = useState(false);
@@ -79,16 +73,24 @@ export default function FeedbackPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Load current member on mount
+  // Check login & admin role on mount
   useEffect(() => {
     const saved = localStorage.getItem('enactus_member');
+    const adminSession = sessionStorage.getItem('enactus_admin_auth');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
+        const parsed: Member = JSON.parse(saved);
         setCurrentMember(parsed);
+        if (parsed.id === 'ENC-2302' || parsed.role === 'admin' || adminSession === 'true') {
+          setIsAdmin(true);
+          loadAdminFeed();
+        }
       } catch (e) {
         console.error(e);
       }
+    } else if (adminSession === 'true') {
+      setIsAdmin(true);
+      loadAdminFeed();
     }
     loadMembers();
   }, []);
@@ -102,7 +104,7 @@ export default function FeedbackPage() {
     }
   };
 
-  // Securely load coordinator feeds ONLY upon unlocking
+  // Load admin feeds only for admin account
   const loadAdminFeed = async () => {
     setLoadingAdmin(true);
     try {
@@ -113,7 +115,7 @@ export default function FeedbackPage() {
       setAllFeedbackList(peerList);
       setAllSessionFeedbackList(sessionList);
     } catch (err) {
-      console.error('Error loading confidential coordinator feed:', err);
+      console.error('Error loading admin feed:', err);
     } finally {
       setLoadingAdmin(false);
     }
@@ -138,42 +140,6 @@ export default function FeedbackPage() {
     if (tab === 'inbox' && currentMember) {
       loadInbox(currentMember.id);
     }
-  };
-
-  // Open Coordinator Portal: check existing session or ask for password
-  const handleOpenCoordinatorPortal = () => {
-    const hasAdminSession = sessionStorage.getItem('enactus_admin_auth') === 'true';
-    if (hasAdminSession) {
-      setIsCoordinatorUnlocked(true);
-      loadAdminFeed();
-    } else {
-      setShowPasswordModal(true);
-      setPasswordError('');
-      setPasswordInput('');
-    }
-  };
-
-  // Verify Coordinator Password
-  const handleVerifyPassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    const correctPass = '23022006Ha#';
-    if (passwordInput.trim() === correctPass) {
-      sessionStorage.setItem('enactus_admin_auth', 'true');
-      setShowPasswordModal(false);
-      setPasswordInput('');
-      setPasswordError('');
-      setIsCoordinatorUnlocked(true);
-      loadAdminFeed();
-    } else {
-      setPasswordError('Incorrect coordinator password. Access denied.');
-    }
-  };
-
-  // Lock and return to Safe Member View immediately
-  const handleLockCoordinatorView = () => {
-    setIsCoordinatorUnlocked(false);
-    setAllFeedbackList([]);
-    setAllSessionFeedbackList([]);
   };
 
   // Submit Peer Feedback (Member only)
@@ -210,7 +176,7 @@ export default function FeedbackPage() {
         wish,
       });
 
-      setSuccessMsg(`Feedback sent privately to ${targetMember.name}! You earned +5 points! ⭐`);
+      setSuccessMsg(`Feedback sent to ${targetMember.name}! You earned +5 points! ⭐`);
       setStar1('');
       setStar2('');
       setWish('');
@@ -248,7 +214,7 @@ export default function FeedbackPage() {
       });
 
       setSuccessMsg(
-        'Thank you! Your evaluation is securely recorded for the coordinator only, and +5 bonus points were added! ⭐'
+        'Thank you! Your evaluation has been submitted, and +5 bonus points were added to your profile! ⭐'
       );
       setKeyTakeaway('');
       setImprovementWish('');
@@ -302,7 +268,7 @@ export default function FeedbackPage() {
     }
   };
 
-  // Summary Metrics for Coordinator
+  // Summary Metrics for Admin
   const totalSessionReviews = allSessionFeedbackList.length;
   const avgSessionRating = totalSessionReviews > 0
     ? (allSessionFeedbackList.reduce((acc, curr) => acc + (curr.sessionRating || 5), 0) / totalSessionReviews).toFixed(1)
@@ -312,23 +278,23 @@ export default function FeedbackPage() {
     : '5.0';
 
   // ==========================================
-  // VIEW A: COORDINATOR CONFIDENTIAL OVERSIGHT VIEW
-  // (Only visible when unlocked with Coordinator Secret Password)
+  // VIEW A: ADMIN ACCOUNT CONFIDENTIAL VIEW
+  // (Rendered ONLY if the logged-in user is the Coordinator Admin account)
   // ==========================================
-  if (isCoordinatorUnlocked) {
+  if (isAdmin && adminMode === 'oversight') {
     return (
       <div className="space-y-4 pb-8">
-        {/* Header with Lock Button */}
+        {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <img src="/enactus-icon.png" alt="Enactus" className="w-6 h-6 object-contain" />
             <div>
               <h1 className="text-base font-bold text-white flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-yellow-400" />
-                <span>Coordinator Confidential Portal</span>
+                <span>Coordinator Feedback Portal</span>
               </h1>
               <p className="text-[10px] text-slate-400">
-                Private session & coordinator evaluations • Only you see this
+                Session & coordinator evaluations • Only visible from your admin account
               </p>
             </div>
           </div>
@@ -341,12 +307,12 @@ export default function FeedbackPage() {
               Refresh
             </button>
             <button
-              onClick={handleLockCoordinatorView}
-              className="px-2.5 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-xs font-bold rounded-xl flex items-center gap-1 transition-all cursor-pointer shadow-sm"
-              title="Lock and hide confidential view"
+              onClick={() => setAdminMode('member')}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1 transition-all cursor-pointer border border-slate-700"
+              title="Test member submission forms"
             >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Lock & Hide</span>
+              <Eye className="w-3.5 h-3.5 text-slate-400" />
+              <span>Member View</span>
             </button>
           </div>
         </div>
@@ -409,7 +375,7 @@ export default function FeedbackPage() {
             </div>
 
             {loadingAdmin ? (
-              <p className="text-center py-8 text-xs text-slate-400">Loading confidential evaluations...</p>
+              <p className="text-center py-8 text-xs text-slate-400">Loading evaluations...</p>
             ) : allSessionFeedbackList.length === 0 ? (
               <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-700/60 text-slate-400 text-xs">
                 No session evaluations submitted yet.
@@ -548,12 +514,12 @@ export default function FeedbackPage() {
   }
 
   // ==========================================
-  // VIEW B: SAFE DEFAULT MEMBER FEEDBACK VIEW
-  // (Always the default; zero exposure of session reviews or other members' critiques)
+  // VIEW B: REGULAR MEMBER FEEDBACK VIEW
+  // (Zero buttons, zero hints, zero coordinator access shown)
   // ==========================================
   return (
     <div className="space-y-4 pb-6">
-      {/* Header with Safe Mode info & Coordinator Portal button */}
+      {/* Clean Member Header */}
       <div className="flex items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex items-center gap-2.5">
           <img src="/enactus-icon.png" alt="Enactus" className="w-7 h-7 object-contain" />
@@ -563,23 +529,24 @@ export default function FeedbackPage() {
               <span>Feedback Center</span>
             </h1>
             <p className="text-[10px] text-slate-400">
-              Presentations peer critiques & confidential session evaluations
+              Peer critique & session evaluations • Earn +5 pts for feedback
             </p>
           </div>
         </div>
 
-        {/* Discrete Coordinator Secret Unlock Button */}
-        <button
-          onClick={handleOpenCoordinatorPortal}
-          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-yellow-400 border border-slate-700 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-          title="Coordinator Secret Access to view Session Evaluations"
-        >
-          <Lock className="w-3.5 h-3.5 text-yellow-400" />
-          <span>Coordinator View</span>
-        </button>
+        {/* If Admin is testing member view, show button to return to Oversight */}
+        {isAdmin && (
+          <button
+            onClick={() => setAdminMode('oversight')}
+            className="px-2.5 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold text-[11px] rounded-xl flex items-center gap-1 shadow-sm transition-all"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Admin Portal</span>
+          </button>
+        )}
       </div>
 
-      {/* 3 Safe Tabs in the Pill Bar for Members */}
+      {/* 3 Tabs in the Pill Bar for Members */}
       <div className="grid grid-cols-3 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
           onClick={() => handleTabChange('peer')}
@@ -713,7 +680,7 @@ export default function FeedbackPage() {
         </form>
       )}
 
-      {/* TAB 2: SESSION & COORDINATOR EVALUATION (Strictly Private to Coordinator) */}
+      {/* TAB 2: SESSION & COORDINATOR EVALUATION */}
       {activeTab === 'session' && (
         <form onSubmit={handleSessionSubmit} className="bg-slate-800/50 border border-slate-700/60 p-4 rounded-3xl space-y-4">
           <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-700/60 space-y-1">
@@ -722,12 +689,8 @@ export default function FeedbackPage() {
               <span>Session & Coordinator Evaluation</span>
             </span>
             <p className="text-[11px] text-slate-400">
-              Help your coordinator improve every session.
+              Help your coordinator make every session more valuable and engaging.
             </p>
-            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/20 text-yellow-300 text-[10px] font-semibold mt-1">
-              <Lock className="w-3 h-3 text-yellow-400" />
-              <span>Confidential: Only the coordinator can read this evaluation</span>
-            </div>
           </div>
 
           {/* Session Rating */}
@@ -817,8 +780,8 @@ export default function FeedbackPage() {
                 <span className="text-xs font-semibold text-white block">Submit Anonymously</span>
                 <span className="text-[10px] text-slate-400">
                   {isAnonymous
-                    ? 'Your name will not be shown to the coordinator'
-                    : 'Coordinator will see your name'}
+                    ? 'Your name is completely hidden from the coordinator'
+                    : 'Coordinator will see who sent this'}
                 </span>
               </div>
             </div>
@@ -842,23 +805,15 @@ export default function FeedbackPage() {
           >
             <Send className="w-4 h-4" />
             <span>
-              {submitting ? 'Submitting...' : 'Send Evaluation (+5 pts)'}
+              {submitting ? 'Submitting...' : 'Send Feedback (+5 pts)'}
             </span>
           </button>
         </form>
       )}
 
-      {/* TAB 3: INBOX (Strictly Private to the Recipient Member) */}
+      {/* TAB 3: INBOX */}
       {activeTab === 'inbox' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-semibold text-slate-300">Your Received Peer Feedback</span>
-            <span className="text-[10px] text-yellow-400/90 font-medium flex items-center gap-1 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">
-              <Lock className="w-2.5 h-2.5" />
-              <span>Private to you</span>
-            </span>
-          </div>
-
           {!currentMember ? (
             <div className="text-center py-12 text-slate-400 text-xs">
               Please sign up or log in first on the Home screen to view your feedback.
@@ -939,75 +894,6 @@ export default function FeedbackPage() {
               </div>
             ))
           )}
-        </div>
-      )}
-
-      {/* ========================================== */}
-      {/* COORDINATOR SECRET PASSWORD AUTHENTICATION MODAL */}
-      {/* ========================================== */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setShowPasswordModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-2xl bg-yellow-400/10 border border-yellow-400/20 text-yellow-400">
-                <KeyRound className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white">Coordinator Verification</h3>
-                <p className="text-[10px] text-slate-400">
-                  Enter coordinator password to view private evaluations
-                </p>
-              </div>
-            </div>
-
-            {passwordError && (
-              <div className="p-2.5 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl flex items-center gap-1.5 font-medium">
-                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>{passwordError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleVerifyPassword} className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-300">
-                  Coordinator Secret Password
-                </label>
-                <input
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="Enter secret password..."
-                  className="w-full px-3.5 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                  autoFocus
-                  required
-                />
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2.5 bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  <span>Unlock</span>
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>
