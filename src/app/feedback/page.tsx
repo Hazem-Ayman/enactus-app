@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import { 
   getAllMembers, 
   submitFeedback, 
-  getReceivedFeedback, 
-  flagFeedback,
   submitSessionFeedback,
   getAllFeedbackForAdmin,
   getAllSessionFeedback,
@@ -13,13 +11,11 @@ import {
   deleteSessionFeedbackItem
 } from '@/lib/firestore';
 import { Member, Feedback, SessionFeedback } from '@/types';
-import DiceBearAvatar from '@/components/DiceBearAvatar';
 import confetti from 'canvas-confetti';
 import { 
   Star, 
   Sparkles, 
   Send, 
-  Inbox, 
   Flag, 
   CheckCircle2, 
   AlertCircle,
@@ -28,19 +24,15 @@ import {
   ShieldCheck,
   EyeOff,
   Trash2,
-  UserCheck,
-  Eye
+  UserCheck
 } from 'lucide-react';
 
 export default function FeedbackPage() {
   const [currentMember, setCurrentMember] = useState<Member | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Toggle for admin account between moderation oversight & member form view
-  const [adminMode, setAdminMode] = useState<'oversight' | 'member'>('oversight');
-
-  // Tabs for regular members: 'peer' | 'session' | 'inbox'
-  const [activeTab, setActiveTab] = useState<'peer' | 'session' | 'inbox'>('peer');
+  // Tabs for regular members: only 2 write tabs (no reading feedback)
+  const [activeTab, setActiveTab] = useState<'peer' | 'session'>('peer');
 
   // Subtabs for admin account: 'all-session' | 'all-peer'
   const [adminTab, setAdminTab] = useState<'all-session' | 'all-peer'>('all-session');
@@ -51,10 +43,6 @@ export default function FeedbackPage() {
   const [star1, setStar1] = useState('');
   const [star2, setStar2] = useState('');
   const [wish, setWish] = useState('');
-
-  // Inbox list for received peer feedback (members)
-  const [inboxList, setInboxList] = useState<Feedback[]>([]);
-  const [loadingInbox, setLoadingInbox] = useState(false);
 
   // Admin Oversight Lists (Loaded ONLY if logged in as admin)
   const [allFeedbackList, setAllFeedbackList] = useState<Feedback[]>([]);
@@ -118,27 +106,6 @@ export default function FeedbackPage() {
       console.error('Error loading admin feed:', err);
     } finally {
       setLoadingAdmin(false);
-    }
-  };
-
-  const loadInbox = async (memberId: string) => {
-    setLoadingInbox(true);
-    try {
-      const feedback = await getReceivedFeedback(memberId);
-      setInboxList(feedback);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingInbox(false);
-    }
-  };
-
-  const handleTabChange = (tab: 'peer' | 'session' | 'inbox') => {
-    setActiveTab(tab);
-    setErrorMsg('');
-    setSuccessMsg('');
-    if (tab === 'inbox' && currentMember) {
-      loadInbox(currentMember.id);
     }
   };
 
@@ -214,7 +181,7 @@ export default function FeedbackPage() {
       });
 
       setSuccessMsg(
-        'Thank you! Your evaluation has been submitted, and +5 bonus points were added to your profile! ⭐'
+        'Thank you! Your feedback has been submitted, and +5 bonus points were added to your profile! ⭐'
       );
       setKeyTakeaway('');
       setImprovementWish('');
@@ -250,24 +217,6 @@ export default function FeedbackPage() {
     }
   };
 
-  // Member Action: Flag feedback
-  const handleFlag = async (item: Feedback) => {
-    const confirmFlag = window.confirm(
-      'Flag this feedback for coordinator review? Coordinators will inspect it.'
-    );
-    if (!confirmFlag) return;
-
-    try {
-      await flagFeedback(item.id, true);
-      setInboxList((prev) =>
-        prev.map((f) => (f.id === item.id ? { ...f, flagged: true } : f))
-      );
-      alert('Feedback has been flagged for coordinator review.');
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   // Summary Metrics for Admin
   const totalSessionReviews = allSessionFeedbackList.length;
   const avgSessionRating = totalSessionReviews > 0
@@ -278,10 +227,10 @@ export default function FeedbackPage() {
     : '5.0';
 
   // ==========================================
-  // VIEW A: ADMIN ACCOUNT CONFIDENTIAL VIEW
-  // (Rendered ONLY if the logged-in user is the Coordinator Admin account)
+  // VIEW A: ADMIN ACCOUNT VIEW
+  // (Admin automatically sees everything directly without pressing any button)
   // ==========================================
-  if (isAdmin && adminMode === 'oversight') {
+  if (isAdmin) {
     return (
       <div className="space-y-4 pb-8">
         {/* Header */}
@@ -294,34 +243,24 @@ export default function FeedbackPage() {
                 <span>Coordinator Feedback Portal</span>
               </h1>
               <p className="text-[10px] text-slate-400">
-                Session & coordinator evaluations • Only visible from your admin account
+                Live oversight of all session evaluations & peer critiques
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={loadAdminFeed}
-              className="text-xs text-yellow-400 hover:underline px-2 py-1"
-            >
-              Refresh
-            </button>
-            <button
-              onClick={() => setAdminMode('member')}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1 transition-all cursor-pointer border border-slate-700"
-              title="Test member submission forms"
-            >
-              <Eye className="w-3.5 h-3.5 text-slate-400" />
-              <span>Member View</span>
-            </button>
-          </div>
+          <button
+            onClick={loadAdminFeed}
+            className="text-xs text-yellow-400 hover:underline px-2 py-1 font-semibold"
+          >
+            Refresh
+          </button>
         </div>
 
         {/* 2 Coordinator Oversight Tabs */}
         <div className="grid grid-cols-2 gap-1.5 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
           <button
             onClick={() => setAdminTab('all-session')}
-            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               adminTab === 'all-session'
                 ? 'bg-yellow-400 text-slate-950 font-bold shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -333,7 +272,7 @@ export default function FeedbackPage() {
 
           <button
             onClick={() => setAdminTab('all-peer')}
-            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+            className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               adminTab === 'all-peer'
                 ? 'bg-yellow-400 text-slate-950 font-bold shadow-sm'
                 : 'text-slate-400 hover:text-white'
@@ -420,7 +359,7 @@ export default function FeedbackPage() {
                       </div>
                       <button
                         onClick={() => handleDeleteSessionFeedback(item.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700"
+                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700 cursor-pointer"
                         title="Delete evaluation"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -482,7 +421,7 @@ export default function FeedbackPage() {
                       )}
                       <button
                         onClick={() => handleDeletePeerFeedback(item.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700"
+                        className="p-1.5 text-slate-400 hover:text-rose-400 transition-colors rounded-lg hover:bg-slate-700 cursor-pointer"
                         title="Delete this feedback"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -514,74 +453,49 @@ export default function FeedbackPage() {
   }
 
   // ==========================================
-  // VIEW B: REGULAR MEMBER FEEDBACK VIEW
-  // (Zero buttons, zero hints, zero coordinator access shown)
+  // VIEW B: REGULAR MEMBER VIEW
+  // (Members can ONLY WRITE feedback. They CANNOT read any feedback)
   // ==========================================
   return (
     <div className="space-y-4 pb-6">
       {/* Clean Member Header */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-2.5">
-          <img src="/enactus-icon.png" alt="Enactus" className="w-7 h-7 object-contain" />
-          <div>
-            <h1 className="text-lg font-bold text-white flex items-center gap-2">
-              <MessageSquareHeart className="w-5 h-5 text-amber-400" />
-              <span>Feedback Center</span>
-            </h1>
-            <p className="text-[10px] text-slate-400">
-              Peer critique & session evaluations • Earn +5 pts for feedback
-            </p>
-          </div>
+      <div className="flex items-center gap-2.5 border-b border-slate-800 pb-3">
+        <img src="/enactus-icon.png" alt="Enactus" className="w-7 h-7 object-contain" />
+        <div>
+          <h1 className="text-lg font-bold text-white flex items-center gap-2">
+            <MessageSquareHeart className="w-5 h-5 text-amber-400" />
+            <span>Feedback Center</span>
+          </h1>
+          <p className="text-[10px] text-slate-400">
+            Submit peer critique & session evaluations • Earn +5 pts
+          </p>
         </div>
-
-        {/* If Admin is testing member view, show button to return to Oversight */}
-        {isAdmin && (
-          <button
-            onClick={() => setAdminMode('oversight')}
-            className="px-2.5 py-1.5 bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold text-[11px] rounded-xl flex items-center gap-1 shadow-sm transition-all"
-          >
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Admin Portal</span>
-          </button>
-        )}
       </div>
 
-      {/* 3 Tabs in the Pill Bar for Members */}
-      <div className="grid grid-cols-3 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
+      {/* 2 Write-Only Tabs for Members */}
+      <div className="grid grid-cols-2 gap-1 bg-slate-800/80 p-1 rounded-xl text-xs font-semibold">
         <button
-          onClick={() => handleTabChange('peer')}
-          className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1 truncate ${
+          onClick={() => { setActiveTab('peer'); setErrorMsg(''); setSuccessMsg(''); }}
+          className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
             activeTab === 'peer'
               ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Send className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">Peer (2★1W)</span>
+          <Send className="w-3.5 h-3.5" />
+          <span>Peer (2★1W)</span>
         </button>
 
         <button
-          onClick={() => handleTabChange('session')}
-          className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1 truncate ${
+          onClick={() => { setActiveTab('session'); setErrorMsg(''); setSuccessMsg(''); }}
+          className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
             activeTab === 'session'
               ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Presentation className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">Session & Lead</span>
-        </button>
-
-        <button
-          onClick={() => handleTabChange('inbox')}
-          className={`py-2 rounded-lg transition-all flex items-center justify-center gap-1 truncate ${
-            activeTab === 'inbox'
-              ? 'bg-amber-400 text-slate-950 font-bold shadow-sm'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Inbox className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">My Received</span>
+          <Presentation className="w-3.5 h-3.5" />
+          <span>Session & Lead</span>
         </button>
       </div>
 
@@ -600,7 +514,7 @@ export default function FeedbackPage() {
         </div>
       )}
 
-      {/* TAB 1: PEER FEEDBACK (2 STARS & 1 WISH) */}
+      {/* TAB 1: WRITE PEER FEEDBACK (2 STARS & 1 WISH) */}
       {activeTab === 'peer' && (
         <form onSubmit={handlePeerSubmit} className="bg-slate-800/50 border border-slate-700/60 p-4 rounded-3xl space-y-4">
           <div className="space-y-1">
@@ -680,7 +594,7 @@ export default function FeedbackPage() {
         </form>
       )}
 
-      {/* TAB 2: SESSION & COORDINATOR EVALUATION */}
+      {/* TAB 2: WRITE SESSION & COORDINATOR EVALUATION */}
       {activeTab === 'session' && (
         <form onSubmit={handleSessionSubmit} className="bg-slate-800/50 border border-slate-700/60 p-4 rounded-3xl space-y-4">
           <div className="bg-slate-900/60 p-3 rounded-2xl border border-slate-700/60 space-y-1">
@@ -809,92 +723,6 @@ export default function FeedbackPage() {
             </span>
           </button>
         </form>
-      )}
-
-      {/* TAB 3: INBOX */}
-      {activeTab === 'inbox' && (
-        <div className="space-y-3">
-          {!currentMember ? (
-            <div className="text-center py-12 text-slate-400 text-xs">
-              Please sign up or log in first on the Home screen to view your feedback.
-            </div>
-          ) : loadingInbox ? (
-            <div className="text-center py-12 text-slate-400 text-xs">
-              Loading your feedback feed...
-            </div>
-          ) : inboxList.length === 0 ? (
-            <div className="text-center py-12 bg-slate-800/40 rounded-2xl border border-slate-800 text-slate-400 text-xs space-y-1">
-              <Inbox className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="font-semibold text-slate-300">No feedback received yet</p>
-              <p className="text-[11px] text-slate-500">
-                Feedback given by your peers after your presentation will appear here privately.
-              </p>
-            </div>
-          ) : (
-            inboxList.map((item) => (
-              <div
-                key={item.id}
-                className="p-4 bg-slate-800/60 border border-slate-700/80 rounded-2xl space-y-3 relative"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <DiceBearAvatar name={item.fromMemberName} size="sm" />
-                    <div>
-                      <span className="text-xs font-bold text-white block">
-                        From: {item.fromMemberName}
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        {new Date(item.createdAt).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => handleFlag(item)}
-                    disabled={item.flagged}
-                    title="Flag unfair feedback to coordinator"
-                    className={`p-1.5 rounded-lg text-xs flex items-center gap-1 transition-colors ${
-                      item.flagged
-                        ? 'text-rose-400 bg-rose-500/10'
-                        : 'text-slate-500 hover:text-rose-400 hover:bg-slate-700'
-                    }`}
-                  >
-                    <Flag className="w-3.5 h-3.5" />
-                    <span className="text-[10px]">
-                      {item.flagged ? 'Flagged' : 'Flag'}
-                    </span>
-                  </button>
-                </div>
-
-                <div className="space-y-1.5 pt-1">
-                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
-                    <span className="text-amber-400 font-bold block text-[11px] mb-1">
-                      ⭐ Star 1
-                    </span>
-                    <p className="text-slate-200 text-xs">{item.star1}</p>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
-                    <span className="text-amber-400 font-bold block text-[11px] mb-1">
-                      ⭐ Star 2
-                    </span>
-                    <p className="text-slate-200 text-xs">{item.star2}</p>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-xs">
-                    <span className="text-sky-400 font-bold block text-[11px] mb-1">
-                      ✨ 1 Wish
-                    </span>
-                    <p className="text-slate-200 text-xs">{item.wish}</p>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
       )}
     </div>
   );
